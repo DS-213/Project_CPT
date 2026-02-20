@@ -1,0 +1,2113 @@
+Project: project_pkt1
+Made by: Dmytro Siarkevych
+Date: 17.02.2026
+
+----------------------------------------------------------------------------------------------------------------------
+1. Topology description:
+----------------------------------------------------------------------------------------------------------------------
+
+This topology is a simplified 3 tier architecture, which connects 4 separate zones (Floor1, Floor2, Floor3,Internet(host 10.0.0.86, for better testing) and Basement).
+Each of the separate zone has its own ranges of IP addresses, VLANs, Access Policy, etc.
+
+
+----------------------------------------------------------------------------------------------------------------------
+
+
+				        |10.0.0.86|
+					(INTERNET)
+					    |
+					    |
+     |VLAN45||VLAN40||VLAN30|(Floor2) --- (CORE) --- (Basement | VLAN1 | Servers)
+		         	          /   \
+   				         /     \
+   				  (Floor1)     (Floor3)
+				  |VLAN10|     |VLAN50|
+				  |VLAN20|     |VLAN60|
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+============================================================================================================================
+WARNING: 
+
+In this lab environment, SVIs are treated as trusted infrastructure interfaces.
+Permitting all traffic sourced from SVI is a simplification to avoid over-complicating ACLs for control-plane and management protocols such as HSRP, DHCP relay, NTP, Syslog and SSH
+
+----------------------------------------------------------------------------------------------------------------------------
+
+HSRP control traffic is not affected by the applied VLAN ACLs due to its link-local multicast nature (TTL=1).
+Additional permit statements for SVI-sourced traffic are included to avoid potential issues with management-plane traffic in Packet Tracer.
+
+----------------------------------------------------------------------------------------------------------------------------
+
+DNS access model :
+
+End hosts are allowed to perform DNS resolution (UDP/TCP port 53) everywhere.
+Direct access to DNS servers (ICMP, TCP other than 53) MAY be blocked by ACLs and policy requirements if needed.
+
+For example, if the policy will be about denying access to the remote servers means that UDP/TCP 53 kinds of messages still 
+won`t be discarded. 
+----------------------------------------------------------------------------------------------------------------------------
+
+Special Devices meaning:
+
+Special device means device which IP address statically assigned and should be considered as trusted. Usually it is Layer 2 
+Switches of Access and Distribution. They use VLAN default gateway as their own and belong to specific VLAN.
+To simplify, it is the devices with SVI, but aren't used in routing the packets. It allows to provide
+SSH, NTP, FTP, Syslog and other useful features even on Layer 2 devices
+
+----------------------------------------------------------------------------------------------------------------------------
+SVI and MLS meaning:
+
+SVI means Switch Virtual Interface,which is assigned to Access, Distribution and Multilayer Switches. MLS means MultiLayer 
+Switch
+----------------------------------------------------------------------------------------------------------------------------
+Banners:
+
+Each device has its message of the day.
+----------------------------------------------------------------------------------------------------------------------------
+Remote and local server meaning:
+
+Remote server means that server is located in the other network.
+Local server means that server is located in the same network
+
+============================================================================================================================
+----------------------------------------------------------------------------------------------------------------------------
+
+|
+|
+lower
+\/
+
+
+
+
+======================================================================================================================
+----------------------------------------------------------------------------------------------------------------------
+Section: Floor1: 10.0.1.0/24
+----------------------------------------------------------------------------------------------------------------------
+======================================================================================================================
+This floor contains two VLANs: VLAN10 (GUESTS) and VLAN20(HR). 
+Protocol policy:
+- VTP: disabled
+- CDP: disabled
+- LLDP: disabled
+- RSTP: enabled (default)
+- EtherChannel: LACP (active mode)
+----------------------------------------------------------------------------------------------------------------------
+Floor1 Topology: 
+
+
+                  PO1
+(CLIENTS) -(ASW3)======(DSW3)-----(MLS3)\  
+              PO2\\  // PO3   \ /        \ 
+                   xx          X          (CORE)
+             PO3 // \\        / \         /
+                //   \\PO2   /   \       /
+(CLIENTS)-(ASW4)======(DSW4)-----(MLS4)/  
+                  PO1
+
+NOTE: 
+- ASW3 ↔ DSW4 = Port-Channel 2  
+- ASW4 ↔ DSW3 = Port-Channel 3
+
+Device  | Admin Username | Password     | Secret (Privileged)
+--------|----------------|--------------|--------------------
+ASW3    | ASW3_ADMIN     | ASW3_UNICAL  | ASW3_UNICAL2
+--------+----------------+--------------+--------------------
+ASW4    | ASW4_ADMIN     | ASW4_UNICAL  | ASW4_UNICAL2
+--------+----------------+--------------+--------------------
+DSW3    | DSW3_ADMIN     | DSW3_UNICAL  | DSW3_UNICAL2
+--------+----------------+--------------+--------------------
+DSW4    | DSW4_ADMIN     | DSW4_UNICAL  | DSW4_UNICAL2
+--------+----------------+--------------+--------------------
+MLS3    | MLS3_ADMIN     | MLS3_UNICAL  | MLS3_UNICAL2
+--------+----------------+--------------+--------------------
+MLS4    | MLS4_ADMIN     | MLS4_UNICAL  | MLS4_UNICAL2
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN10 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN10 uses the following IP range of addresses: 10.0.1.0/25, however addresses 10.0.1.122, .123, .124, .125 and .126 are reserved and cannot be assigned to the default clients. IP 10.0.1.122 is given to ASW3, .123 is given to DSW3. 10.0.1.124 — MLS4 and 10.0.1.125 — MLS3.
+
+| VLAN | Subnet      | Gateway    | DHCP Range          | Reserved IPs |
+| ---- | ----------- | ---------- | ------------------- | ------------ |
+| 10   | 10.0.1.0/25 | 10.0.1.126 | 10.0.1.1-10.0.1.121 | 122–126      |
+
+
+2)The VLAN10 uses ports only on ASW3. For clients Fa0/7-F0/24 including.
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/3                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/4                                           |
+| **Access (VLAN10)** | Fa0/7-Fa0/9 (active), Fa0/10-24 (inactive)             |
+| **Unused / VLAN1**  | Fa0/5(down), Fa0/6(down), Gi0/1(down), Gi0/2 (down)    |
+| **SVI**             | Vlan10 (10.0.1.122), Vlan1 (down)                      |
+
+
+3)VLAN10 default gateway: 10.0.1.126.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.1.126        |
+| Active HSRP     | MLS3 - 10.0.1.125 |
+| Standby HSRP    | MLS4 - 10.0.1.124 |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN10 Clients use local DHCP server(MLS3) and remote DNS server (host 10.0.0.226).
+
+5)VLAN10 Clients are allowed to use internet(host 10.0.0.86) and DNS resolution (UDP/TCP 53), but are not allowed to directly access or reach the DNS server (ICMP, TCP other than 53 is denied)
+
+6)VLAN10 Special devices (10.0.1.122 (asw3.floor1.com), 10.0.1.123 (dsw3.floor1.com), 10.0.1.124 (MLS4's SVI) and 10.0.1.125 (MLS3's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN10 is DSW3 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS3/4. 
+The direction is IN.
+
+
+Extended IP access list VLAN_10
+    10 permit udp any any eq bootpc                                ! Permitting DHCP Server and Clients messages
+    20 permit udp any any eq bootps 
+    30 permit ip 10.0.1.0 0.0.0.127 host 10.0.0.86                 ! Permitting internet access, Internet is host 10.0.0.86
+    40 permit tcp 10.0.1.0 0.0.0.127 host 10.0.0.226 eq domain     ! Permitting DNS TCP/UDP 53 messages
+    50 permit udp 10.0.1.0 0.0.0.127 host 10.0.0.226 eq domain
+    60 permit ip host 10.0.1.125 any                               ! permitting infrastructure-originated traffic 
+    70 permit ip host 10.0.1.124 any 				   ! (management/control-plane simplification
+    80 permit ip host 10.0.1.122 10.0.0.224 0.0.0.31               ! Permitting to ASW3 and DSW3 connectivity to the Basement 
+    90 permit ip host 10.0.1.123 10.0.0.224 0.0.0.31 
+    100 deny ip any any                                            !deny other traffic / to monitor how many packets were denied 
+
+
+
+
+----------------------------------------Testing of VLAN10---------------------------------------------------------------
+
+1) CASE 1: Etherchannel and link status
+Command: In privileged mode: Show etherchannel summary / show spanning-tree (to see if there are no fastEthernets) / show ip interface brief
+
+Expected result: All needed interfaces should be UP/UP
+(DSW3)
+Group  Port-channel  Protocol    Ports
+------+-------------+-----------+----------------------------------------------
+
+1      Po1(SU)           LACP   Fa0/1(P) Fa0/3(P)       
+2      Po3(SU)           LACP   Fa0/2(P) Fa0/4(P) 
+
+Note: 
+If Po2 appears on the DSW3 with status (SD); - , it may be an bug of old configuration. So, don`t pay attention to it
+However, on other Switches it is not okay if some unknown port-channels are shown.
+------------------------------------------------------------------------------------------------------------------------
+2) CASE 2: Clarifying if CDP/LLDP is disabled:
+
+Command: In Privileged mode: show cdp neighbors / show lldp neighbors
+
+Expected result: % CDP is not enabled
+		 % LLDP is not enabled
+------------------------------------------------------------------------------------------------------------------------
+3) CASE 3: Spanning-tree testing
+
+Command: In Privileged mode: show spanning-tree.
+ 
+The expected result: The output depends on the device, but expected to see a DSW3 as the Root Bridge.
+------------------------------------------------------------------------------------------------------------------------
+4) CASE 4: Default Gateway and VLAN connectivity:
+Command: 1) From PC try to ping another host in the same VLAN 
+	 2) From any device in VLAN10 try to ping 10.0.1.126 (VIP), 10.0.1.124 and 10.0.1.125.
+
+Expected result: Successful ping in both cases.
+------------------------------------------------------------------------------------------------------------------------
+5) CASE 5: Test for Internet connection, DHCP and DNS responses. 
+
+Command: 1)ipconfig /all or ipconfig /renew from any PC to check if DHCP messages is working.
+         2)Ping internet.com (10.0.0.86) from any PC.
+ 
+Expected results: 1)Successful DHCP responses and DNS responses. 
+		  2)Ping successful responses is expected.
+------------------------------------------------------------------------------------------------------------------------
+6) CASE 6: Test for connection between VLANs:
+
+Command: To test connection from any PC to the any other VLAN. ping pc1.vlanX.com , X - vlan number.
+
+Expected results: Successful ping to the VLAN10
+		  Unsuccessful ping to the VLAN20, 30, 40, 50, 60
+
+------------------------------------------------------------------------------------------------------------------------
+7)  CASE 7: Test to ping any remote server
+
+Command: Ping 10.0.0.226 (domain server. Can be any other Server) from any PC. 
+
+Expected result: Unsuccessful ping.
+------------------------------------------------------------------------------------------------------------------------
+8) CASE 8: SSH Connection from PC_ADMIN
+
+Command: From the PC_ADMIN try 'SSH -l *login* *IP or domain name of the host* ' command in command prompt to check SSH connectivity to the ASW3,DSW3 or MLS3/4. 
+
+Expected result: Successful connection with logging.
+		 If the brute force attempt detected(5 tries within 45 seconds) on MLS3/4 - block for a 2 minutes.
+		 SSH may be done only from PC_ADMIN, due to VTY-ACCESS-CLASS ACL.
+------------------------------------------------------------------------------------------------------------------------
+9)  CASE 9: NTP testing:
+
+Command: From the either ASW3,DSW3 or MLS3/4 try to check NTP status. In Privileged mode: show ntp associations /show ntp status.
+
+Expected example of output:
+(ASW3)
+
+address         ref clock       st   when     poll    reach  delay          offset            disp
+*~10.0.0.228    127.127.1.1     1    6        16      37     1.00           1.00              0.12
+------------------------------------------------------------------------------------------------------------------------
+10) CASE 10: File Transferring test
+
+Command: From the either ASW3,DSW3 or MLS3/4, try to download any file by TFTP or FTP. The (T)FTP server is 10.0.0.31. 
+In Privileged mode: copy flash: ftp: ; *filename*. 
+
+Expected result: Successful file transfer. (Need to wait a few minutes)
+
+
+------------------------------------------------------------------------------------------------------------------------
+11) Case 11: Syslog testing
+Command: From ASW3, DSW3 or MLS3/4 try to test if the Syslog UDP messages can go to the remote Syslog server (10.0.0.230).
+	 In Global configuration mode
+	 interface *any unused interface*  
+         no shutdown !enabling it 
+	 shutdown !disabling the interface to the default state
+
+Expected result: The new trap would be created and syslog message will appear on the remote server.
+------------------------------------------------------------------------------------------------------------------------
+
+|
+|
+LOWER
+\/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN20 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN20 uses the following IP range of addresses: 10.0.1.224/27. Addresses 10.0.1.250, .251, .252, .253 and .254 are reserved and cannot be assigned to the default clients. IP 10.0.1.250 is given to ASW4, .251 is given to DSW4. 10.0.1.253 — MLS4 and 10.0.1.252 — MLS3.
+
+| VLAN | Subnet        | Gateway    | DHCP Range            | Reserved IPs |
+| ---- | -----------   | ---------- | --------------------- | ------------ |
+| 20   | 10.0.1.224/27 | 10.0.1.254 | 10.0.1.225-10.0.1.249 | 250-254      |
+
+
+2)The VLAN20 uses ports only on ASW4. For clients Fa0/7-F0/24 including.
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/3                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/4                                           |
+| **Access (VLAN20)** | Fa0/7-Fa0/9 (active), Fa0/10-24 (inactive)             |
+| **Unused / VLAN1**  | Fa0/5(down), Fa0/6(down), Gi0/1(down), Gi0/2 (down)    |
+| **SVI**             | Vlan20 (10.0.1.250), Vlan1 (down)                      |
+
+
+3)VLAN20 default gateway: 10.0.1.254.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.1.254        |
+| Active HSRP     | MLS4 - 10.0.1.253 |
+| Standby HSRP    | MLS3 - 10.0.1.252 |
+| HSRP Preemption | Enabled           |
+
+
+4)VLAN20 Clients use remote DHCP server(host 10.0.0.227) and remote DNS server (host 10.0.0.226).
+
+5)VLAN20 Clients can't access internet.com, VLAN10 and VLAN30.
+
+6)VLAN20 Special devices (10.0.1.250 (asw4.floor1.com), 10.0.1.251 (dsw4.floor1.com), 10.0.1.252 (MLS3's SVI) and 10.0.1.253 (MLS4's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN20 is DSW4 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS3/4. 
+The direction is IN.
+
+Extended IP access list VLAN_20
+    10 permit ip host 10.0.1.253 any                        !permitting infrastructure-originated traffic
+    20 permit ip host 10.0.1.252 any 
+    30 deny ip 10.0.1.224 0.0.0.31 host 10.0.0.86           !denying the internet connectivity
+    40 deny ip 10.0.1.224 0.0.0.31 10.0.1.0 0.0.0.127       !denying the VLAN10
+    50 deny ip 10.0.1.224 0.0.0.31 10.0.2.0 0.0.0.63        !denying the VLAN30
+    60 permit ip any any                                    !permitting other traffic
+
+
+----------------------------------------Testing of VLAN20---------------------------------------------------------------
+
+1) CASE 1: Etherchannel and link status
+Command: In privileged mode: Show etherchannel summary / show spanning-tree (to see if there are no fastEthernets) / show ip interface brief
+
+Expected result: 
+(DSW4)
+Group  Port-channel  Protocol    Ports
+------+-------------+-----------+------------------
+
+1      Po1(SU)           LACP   Fa0/1(P) Fa0/3(P) 
+2      Po2(SU)           LACP   Fa0/2(P) Fa0/4(P) 
+
+------------------------------------------------------------------------------------------------------------------------
+2) CASE 2: Clarifying if CDP/LLDP is disabled:
+
+Command: In Privileged mode: show cdp neighbors / show lldp neighbors
+
+Expected result: % CDP is not enabled
+		 % LLDP is not enabled
+
+------------------------------------------------------------------------------------------------------------------------
+3) CASE 3: Spanning-tree testing
+
+Command: In Privileged mode: show spanning-tree.
+ 
+The expected result: The output depends on the device, but expected to see a DSW4 as a Root Bridge.
+
+------------------------------------------------------------------------------------------------------------------------
+4) CASE 4: Default Gateway and VLAN connectivity:
+
+Command: 1) From PC try to ping another host in the same VLAN 
+	 2) From any device in VLAN20 try to ping 10.0.1.254 (VIP), 10.0.1.253 and 10.0.1.252.
+
+Expected result: Successful ping in both cases.
+
+------------------------------------------------------------------------------------------------------------------------
+5) CASE 5: Test for Internet connection, DHCP and DNS responses. 
+
+Command: 1)ipconfig /all or ipconfig /renew from any PC to check if DHCP messages is working.
+         2)Ping internet.com (10.0.0.86) from any PC.
+ 
+Expected results: 1)Successful DHCP responses and DNS responses. 
+		  2)Ping unsuccessful responses is expected.
+
+------------------------------------------------------------------------------------------------------------------------
+6) CASE 6: Test for connection between VLANs:
+
+Command: To test connection from any PC to the any other VLAN. ping pc1.vlanX.com.
+
+Expected results: Successful ping to the VLAN20, 40, 50, 60
+		  Unsuccessful ping to the VLAN10, 30
+
+------------------------------------------------------------------------------------------------------------------------
+7)  CASE 7: Test to ping any remote server
+
+Command: Ping 10.0.0.226 (domain server. Can be any other Server) from any PC. 
+
+Expected result: Successful ping.
+
+------------------------------------------------------------------------------------------------------------------------
+8) CASE 8: SSH Connection from PC_ADMIN
+
+Command: From the PC_ADMIN try 'SSH -l *login* *IP or domain name of the host* ' command in command prompt to check SSH connectivity to the ASW4,DSW4 or MLS3/4. 
+
+Expected result: Successful connection with logging.
+		 If the brute force attempt detected(5 tries within 45 seconds) on MLS3/4 - block for a 2 minutes.
+		 SSH may be done only from PC_ADMIN, due to VTY-ACCESS-CLASS ACL.
+
+------------------------------------------------------------------------------------------------------------------------
+9)  CASE 9: NTP testing:
+
+Command: From the either ASW4,DSW4 or MLS3/4 try to check NTP status. In Privileged mode: show ntp associations /show ntp status.
+
+Expected example of output:
+
+address         ref clock       st   when     poll    reach  delay          offset            disp
+*~10.0.0.228    127.127.1.1     1    6        16      37     1.00           1.00              0.12
+
+------------------------------------------------------------------------------------------------------------------------
+10) CASE 10: File Transferring test
+
+Command: From the either ASW4,DSW4 or MLS3/4, try to download any file by TFTP or FTP. The (T)FTP server is 10.0.0.31. 
+In Privileged mode: copy flash: ftp: ; *filename*. 
+
+Expected result: Successful file transfer. (Need to wait a few minutes)
+
+
+------------------------------------------------------------------------------------------------------------------------
+11) Case 11: Syslog testing
+Command: From ASW4, DSW4 or MLS3/4 try to test if the Syslog UDP messages can go to the remote Syslog server (10.0.0.230).
+	 In Global configuration mode
+	 interface *any unused interface* 
+         no shutdown !enabling it 
+	 shutdown !disabling the interface to the default state
+
+Expected result: The new trap would be created and syslog message will appear on the remote server.
+
+------------------------------------------------------------------------------------------------------------------------
+
+
+|
+|
+LOWER
+\/
+
+	  
+
+
+
+
+======================================================================================================================
+----------------------------------------------------------------------------------------------------------------------
+Section: Floor2: 10.0.2.0/24
+----------------------------------------------------------------------------------------------------------------------
+======================================================================================================================
+This floor contains three VLANs: VLAN30 (MANAGERS), VLAN40 (ENGINEERS) and VLAN45(Resources). 
+Protocol policy:
+- VTP: disabled
+- CDP: enabled
+- LLDP: disabled
+- RSTP: enabled (default)
+- EtherChannel: LACP (active mode)
+----------------------------------------------------------------------------------------------------------------------
+Floor2 Topology: 
+
+
+                  PO1
+(CLIENTS) -(ASW5)======(DSW5)-----(MLS5)\  
+             ||  \\  //       \ /        \ 
+         PO3 ||    xx PO2      X          (CORE)
+             ||  // \\        / \         /
+             || //   \\PO2   /   \       /
+(CLIENTS)-(ASW6)======(DSW6)-----(MLS6)/  
+                  PO1|
+
+NOTE: 
+- ASW5 ↔ DSW6 = Port-Channel 2  
+- ASW6 ↔ DSW5 = Port-Channel 2
+- ASW5 ↔ ASW6 = Port-Channel 3 
+-------------------------------------------------------------------------------------------------------------------
+
+CREDENTIALS 
+Device  | Admin Username | Password     | Secret (Privileged)
+--------|----------------|--------------|--------------------
+ASW5    | ASW5_ADMIN     | ASW5_UNICAL  | ASW5_UNICAL2
+--------+----------------+--------------+--------------------
+ASW6    | ASW6_ADMIN     | ASW6_UNICAL  | ASW6_UNICAL2
+--------+----------------+--------------+--------------------
+DSW5    | DSW5_ADMIN     | DSW5_UNICAL  | DSW5_UNICAL2
+--------+----------------+--------------+--------------------
+DSW6    | DSW6_ADMIN     | DSW6_UNICAL  | DSW6_UNICAL2
+--------+----------------+--------------+--------------------
+MLS5    | MLS5_ADMIN     | MLS5_UNICAL  | MLS5_UNICAL2
+--------+----------------+--------------+--------------------
+MLS6    | MLS6_ADMIN     | MLS6_UNICAL  | MLS6_UNICAL2
+-------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN30 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN30 uses the following IP range of addresses: 10.0.2.0/26, addresses 10.0.2.61, .62, .63 are reserved and cannot be assigned to the default clients. IP 10.0.2.60 is given to MLS5, 10.0.2.61 is given to MLS6. The address 10.0.2.62 is the default gateway.
+
+| VLAN | Subnet      | Gateway    | DHCP Range          | Reserved IPs |
+| ---- | ----------- | ---------- | ------------------- | ------------ |
+| 30   | 10.0.2.0/26 | 10.0.2.62  | 10.0.2.1-10.0.2.59  | 60-62        |
+
+
+2)The VLAN30 uses ports only on ASW5. For clients F0/10-12 including.
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN30)** | Fa0/10 (active), Fa0/11–12 (inactive)                  |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan30 (Unused), Vlan1 (down)                          |
+                                                                         
+
+3)VLAN30 default gateway: 10.0.2.62.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.2.62         |
+| Active HSRP     | MLS5 - 10.0.2.60  |
+| Standby HSRP    | MLS6 - 10.0.2.61  |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN30 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN30 Clients can't access VLAN10 and VLAN20
+
+6)VLAN30 Special devices ( 10.0.2.62 (MLS6's SVI) and 10.0.2.61 (MLS5's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN30 is DSW5 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS5/6. 
+The direction is IN.
+
+Extended IP access list VL30
+    10 deny ip 10.0.2.0 0.0.0.63 10.0.1.0 0.0.0.127             !denying the VLAN10
+    15 deny ip 10.0.2.0 0.0.0.63 10.0.1.224 0.0.0.31            !denying the VLAN20
+    20 permit ip any any                                        !permitting others
+
+
+
+
+----------------------------------------Testing of VLAN30---------------------------------------------------------------
+
+1) CASE 1: Etherchannel and link status
+Command: In privileged mode: Show etherchannel summary / show spanning-tree (to see if there are no fastEthernets) / show ip interface brief
+
+Expected result: All needed interfaces should be UP/UP
+(ASW5)
+Number of channel-groups in use: 3
+Number of aggregators:           3
+
+Group  Port-channel  Protocol    Ports
+------+-------------+-----------+----------------------------------------------
+
+1      Po1(SU)           LACP   Fa0/1(P) Fa0/4(P) 
+2      Po2(SU)           LACP   Fa0/2(P) Fa0/5(P) 
+3      Po3(SU)           LACP   Fa0/3(P) Fa0/6(P) 
+
+------------------------------------------------------------------------------------------------------------------------
+2) CASE 2: Clarifying if CDP/LLDP is enabled:
+
+Command: In Privileged mode: show cdp neighbors / show lldp neighbors
+
+Expected result: 
+(ASW5)
+	1)Capability Codes: R - Router, T - Trans Bridge, B - Source Route Bridge
+         	           S - Switch, H - Host, I - IGMP, r - Repeater, P - Phone
+  Device ID    Local Intrfce   Holdtme    Capability   Platform    Port ID
+  ASW6         Por 3            148            S       2960        Fas 0/3
+  ASW6         Por 3            148            S       2960        Fas 0/6
+  ASW6         Por 3            148            S       2960        Por 3
+  DSW6         Por 2            148            S       2960        Fas 0/2
+  DSW6         Por 2            148            S       2960        Fas 0/5
+  DSW6         Por 2            148            S       2960        Por 2
+  DSW5         Por 1            149            S       2960        Fas 0/1
+  DSW5         Por 1            149            S       2960        Fas 0/4
+  DSW5         Por 1            149            S       2960        Por 1
+	2) % LLDP is not enabled
+------------------------------------------------------------------------------------------------------------------------
+3) CASE 3: Spanning-tree testing
+
+Command: In Privileged mode: show spanning-tree.
+ 
+The expected result: The output depends on the device, but expected to see a DSW5 as a Root Bridge.
+------------------------------------------------------------------------------------------------------------------------
+4) CASE 4: Default Gateway and VLAN connectivity:
+Command: 1) From PC try to ping another host in the same VLAN 
+	 2) From any device in VLAN30 try to ping 10.0.2.62 (VIP), 10.0.2.61 and 10.0.2.60.
+
+Expected result: Successful ping in both cases.
+------------------------------------------------------------------------------------------------------------------------
+5) CASE 5: Test for Internet connection, DHCP and DNS responses. 
+
+Command: 1)ipconfig /all or ipconfig /renew from any PC to check if DHCP messages is working.
+         2)Ping internet.com (10.0.0.86) from any PC.
+ 
+Expected results: 1)Successful DHCP responses and DNS responses. 
+		  2)Ping successful responses is expected.
+------------------------------------------------------------------------------------------------------------------------
+6) CASE 6: Test for connection between VLANs:
+
+Command: To test connection from any PC to the any other VLAN. ping pc1.vlanX.com , X - vlan number.
+
+Expected results: Successful ping to the VLAN30,40,50,60
+		  Unsuccessful ping to the VLAN10,20
+
+------------------------------------------------------------------------------------------------------------------------
+7)  CASE 7: Test to ping any remote server
+
+Command: Ping 10.0.0.226 (domain server. Can be any other Server) from any PC. 
+
+Expected result: Successful ping.
+------------------------------------------------------------------------------------------------------------------------
+8) CASE 8: SSH Connection from PC_ADMIN
+
+Command: From the PC_ADMIN try 'SSH -l *login* *IP or domain name of the host* ' command in command prompt to check SSH connectivity to the ASW5 or MLS5/6. 
+
+Expected result: Successful connection with logging.
+		 If the brute force attempt detected(5 tries within 45 seconds) on MLS5/6 - block for a 2 minutes.
+		 SSH may be done only from PC_ADMIN, due to VTY-ACCESS-CLASS ACL.
+------------------------------------------------------------------------------------------------------------------------
+9)  CASE 9: NTP testing:
+
+Command: From the either ASW5 or MLS5/6 try to check NTP status. In Privileged mode: show ntp associations /show ntp status.
+
+Expected example of output:
+(ASW5)
+
+address         ref clock       st   when     poll    reach  delay          offset            disp
+*~10.0.0.228    127.127.1.1     1    6        16      37     1.00           1.00              0.12
+------------------------------------------------------------------------------------------------------------------------
+10) CASE 10: File Transferring test
+
+Command: From the either ASW5 or MLS5/6, try to download any file by TFTP or FTP. The (T)FTP server is 10.0.0.31. 
+In Privileged mode: copy flash: ftp: ; *filename*. 
+
+Expected result: Successful file transfer. (Need to wait a few minutes)
+
+
+------------------------------------------------------------------------------------------------------------------------
+11) Case 11: Syslog testing
+Command: From ASW5 or MLS5/6 try to test if the Syslog UDP messages can go to the remote Syslog server (10.0.0.230).
+	 In Global configuration mode
+	 interface *any unused interface*  
+         no shutdown !enabling it 
+	 shutdown !disabling the interface to the default state
+
+Expected result: The new trap would be created and syslog message will appear on the remote server.
+------------------------------------------------------------------------------------------------------------------------
+	
+
+
+|
+|
+LOWER
+\/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN40 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN40 uses the following IP range of addresses: 10.0.2.128/25, addresses 10.0.2.250, .251, .252, .253 and .254 are reserved and cannot be assigned to the default clients. 
+IP 10.0.2.250 is given to ASW5, 10.0.2.251 is given to DSW5. The addresses 10.0.2.252 - MLS6, 10.0.2.253 - MLS5. 
+The address 10.0.2.254 is the default gateway.
+
+| VLAN | Subnet       | Gateway    | DHCP Range             | Reserved IPs |
+| ---- | -----------  | ---------- | -------------------    | ------------ |
+| 40   | 10.0.2.128/25| 10.0.2.254 | 10.0.2.129-10.0.2.249  | 250-254      |
+
+
+2)The VLAN40 uses ports on both ASW5 and ASW6.
+
+ASW5:    
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN40)** | Fa0/13-14 (active), Fa0/15–24 (inactive)               |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan40 (10.0.2.250), Vlan1 (down)                      |
+
+--------------------------------------------------------------------------------
+                                                                         
+ASW6:
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN40)** | Fa0/13-14 (active), Fa0/15–24 (inactive)               |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan40 (Unused), Vlan1 (down)                          |
+
+
+3)VLAN40 default gateway: 10.0.2.254.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.2.254        |
+| Active HSRP     | MLS6 - 10.0.2.252 |
+| Standby HSRP    | MLS5 - 10.0.2.253 |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN40 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN40 Clients can't access VLAN10.
+
+6)VLAN40 Special devices (10.0.2.250 (ASW5.floor2.com), 10.0.2.251 (DSW5.floor2.com) , 10.0.2.252 (MLS6's SVI) and 10.0.2.253 (MLS5's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN40 is DSW5 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS5/6. 
+The direction is IN.
+
+Extended IP access list VL40
+    10 deny ip 10.0.2.128 0.0.0.127 10.0.1.0 0.0.0.127                       !denying VLAN10
+    20 permit ip any any                                                     !permitting other traffic
+
+
+
+----------------------------------------Testing of VLAN40---------------------------------------------------------------
+
+1) CASE 1: Etherchannel and link status
+Command: In privileged mode: Show etherchannel summary / show spanning-tree (to see if there are no fastEthernets) / show ip interface brief
+
+Expected result: All needed interfaces should be UP/UP
+(ASW5)
+Number of channel-groups in use: 3
+Number of aggregators:           3
+
+Group  Port-channel  Protocol    Ports
+------+-------------+-----------+----------------------------------------------
+
+1      Po1(SU)           LACP   Fa0/1(P) Fa0/4(P) 
+2      Po2(SU)           LACP   Fa0/2(P) Fa0/5(P) 
+3      Po3(SU)           LACP   Fa0/3(P) Fa0/6(P) 
+
+------------------------------------------------------------------------------------------------------------------------
+2) CASE 2: Clarifying if CDP/LLDP is enabled:
+
+Command: In Privileged mode: show cdp neighbors / show lldp neighbors
+
+Expected result: 
+(ASW5)
+	1)Capability Codes: R - Router, T - Trans Bridge, B - Source Route Bridge
+         	           S - Switch, H - Host, I - IGMP, r - Repeater, P - Phone
+  Device ID    Local Intrfce   Holdtme    Capability   Platform    Port ID
+  ASW6         Por 3            148            S       2960        Fas 0/3
+  ASW6         Por 3            148            S       2960        Fas 0/6
+  ASW6         Por 3            148            S       2960        Por 3
+  DSW6         Por 2            148            S       2960        Fas 0/2
+  DSW6         Por 2            148            S       2960        Fas 0/5
+  DSW6         Por 2            148            S       2960        Por 2
+  DSW5         Por 1            149            S       2960        Fas 0/1
+  DSW5         Por 1            149            S       2960        Fas 0/4
+  DSW5         Por 1            149            S       2960        Por 1
+	2) % LLDP is not enabled
+------------------------------------------------------------------------------------------------------------------------
+3) CASE 3: Spanning-tree testing
+
+Command: In Privileged mode: show spanning-tree.
+ 
+The expected result: The output depends on the device, but expected to see a DSW5 as a Root Bridge.
+------------------------------------------------------------------------------------------------------------------------
+4) CASE 4: Default Gateway and VLAN connectivity:
+Command: 1) From PC try to ping another host in the same VLAN 
+	 2) From any device in VLAN40 try to ping 10.0.2.250 , 10.0.2.251, .252, .253, .254 (VIP)
+
+Expected result: Successful ping in each case.
+------------------------------------------------------------------------------------------------------------------------
+5) CASE 5: Test for Internet connection, DHCP and DNS responses. 
+
+Command: 1)ipconfig /all or ipconfig /renew from any PC to check if DHCP messages is working.
+         2)Ping internet.com (10.0.0.86) from any PC.
+ 
+Expected results: 1)Successful DHCP responses and DNS responses. 
+		  2)Ping successful responses is expected.
+------------------------------------------------------------------------------------------------------------------------
+6) CASE 6: Test for connection between VLANs:
+
+Command: To test connection from any PC to the any other VLAN. ping pc1.vlanX.com , X - vlan number.
+
+Expected results: Successful ping to the VLAN20,30,40,50,60
+		  Unsuccessful ping to the VLAN10
+
+------------------------------------------------------------------------------------------------------------------------
+7)  CASE 7: Test to ping any remote server
+
+Command: Ping 10.0.0.226 (domain server. Can be any other Server) from any PC. 
+
+Expected result: Successful ping.
+------------------------------------------------------------------------------------------------------------------------
+8) CASE 8: SSH Connection from PC_ADMIN
+
+Command: From the PC_ADMIN try 'SSH -l *login* *IP or domain name of the host* ' command in command prompt to check SSH connectivity to the ASW5,DSW5 or MLS5/6. 
+
+Expected result: Successful connection with logging.
+		 If the brute force attempt detected(5 tries within 45 seconds) on MLS5/6 - block for a 2 minutes.
+		 SSH may be done only from PC_ADMIN, due to VTY-ACCESS-CLASS ACL.
+------------------------------------------------------------------------------------------------------------------------
+9)  CASE 9: NTP testing:
+
+Command: From the either ASW5,DSW5 or MLS5/6 try to check NTP status. In Privileged mode: show ntp associations /show ntp status.
+
+Expected example of output:
+(ASW5)
+
+address         ref clock       st   when     poll    reach  delay          offset            disp
+*~10.0.0.228    127.127.1.1     1    6        16      37     1.00           1.00              0.12
+------------------------------------------------------------------------------------------------------------------------
+10) CASE 10: File Transferring test
+
+Command: From the either ASW5,DSW5 or MLS5/6, try to download any file by TFTP or FTP. The (T)FTP server is 10.0.0.31. 
+In Privileged mode: copy flash: ftp: ; *filename*. 
+
+Expected result: Successful file transfer. (Need to wait a few minutes)
+
+
+------------------------------------------------------------------------------------------------------------------------
+11) Case 11: Syslog testing
+Command: From ASW5, DSW5 or MLS5/6 try to test if the Syslog UDP messages can go to the remote Syslog server (10.0.0.230).
+	 In Global configuration mode
+	 interface *any unused interface*  
+         no shutdown !enabling it 
+	 shutdown !disabling the interface to the default state
+
+Expected result: The new trap would be created and syslog message will appear on the remote server.
+------------------------------------------------------------------------------------------------------------------------
+
+
+|
+|
+LOWER
+\/
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN45 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN45 uses the following IP range of addresses: 10.0.2.64/26, addresses 10.0.2.126, .125, .124, .123 and .122 are reserved and cannot be assigned to the default clients. 
+IP 10.0.2.122 is given to ASW6, 10.0.2.123 is given to DSW6. The addresses 10.0.2.124 - MLS6, 10.0.2.125 - MLS5. 
+The address 10.0.2.126 is the default gateway.
+
+| VLAN | Subnet       | Gateway    | DHCP Range             | Reserved IPs |
+| ---- | -----------  | ---------- | -------------------    | ------------ |
+| 45   | 10.0.2.64/26 | 10.0.2.126 | 10.0.2.65 - 10.0.2.121 | 122-126      |
+
+
+2)The VLAN45 uses ports only on ASW6.
+                                                                      
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN45)** | Fa0/10 (active), Fa0/11–12 (inactive)                  |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan45 (10.0.2.122), Vlan1 (down)                      |
+
+
+3)VLAN45 default gateway: 10.0.2.126.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.2.126        |
+| Active HSRP     | MLS6 - 10.0.2.124 |
+| Standby HSRP    | MLS5 - 10.0.2.125 |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN45 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN45 Clients can access only to the VLAN20, 40.
+
+6)VLAN45 Special devices (10.0.2.122 (ASW6.floor2.com), 10.0.2.123 (DSW6.floor2.com) , 10.0.2.124 (MLS6's SVI) and 10.0.2.125 (MLS5's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN45 is DSW6 and configured as by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS5/6. 
+The direction is IN.
+
+Extended IP access list VL45
+     5 permit ip host 10.0.2.122 any                                       !permitting special devices to use services, TFTP, !!FTP, SSH, etc.
+    10 permit ip host 10.0.2.123 any                                       
+    20 permit ip host 10.0.2.124 any                                       !permitting infrastructure-originated traffic 
+    30 permit ip host 10.0.2.125 any                                       
+    40 permit ip 10.0.2.64 0.0.0.63 10.0.1.224 0.0.0.31                    !permitting VLAN20
+    50 permit ip 10.0.1.224 0.0.0.31 10.0.2.64 0.0.0.63                    !permitting VLAN20(Dead part of the code, isn't 										   !working)
+    60 permit ip 10.0.2.64 0.0.0.63 10.0.2.128 0.0.0.127                   !permitting VLAN40
+    70 permit ip 10.0.2.128 0.0.0.127 10.0.2.64 0.0.0.63
+    80 permit tcp any host 10.0.0.226 eq domain                            !permitting to use DNS responses of TCP and UDP
+    90 permit udp any host 10.0.0.226 eq domain
+    100 permit udp any any eq bootps                                       !permitting DHCP messages for any clients
+    110 permit udp any any eq bootpc
+    120 deny ip any any                                                    !denying any other traffic
+
+----------------------------------------Testing of VLAN45---------------------------------------------------------------
+
+1) CASE 1: Etherchannel and link status
+
+Command: In privileged mode: Show etherchannel summary / show spanning-tree (to see if there are no fastEthernets) / show ip interface brief
+
+Expected result: All needed interfaces should be UP/UP
+(ASW6)
+Number of channel-groups in use: 3
+Number of aggregators:           3
+
+Group  Port-channel  Protocol    Ports
+------+-------------+-----------+----------------------------------------------
+
+1      Po1(SU)           LACP   Fa0/1(P) Fa0/4(P) 
+2      Po2(SU)           LACP   Fa0/2(P) Fa0/5(P) 
+3      Po3(SU)           LACP   Fa0/3(P) Fa0/6(P)
+
+2) CASE 2: Clarifying if CDP/LLDP is enabled:
+
+Command: In Privileged mode: show cdp neighbors / show lldp neighbors
+
+Expected result: 
+(DSW6)
+	1)Capability Codes: R - Router, T - Trans Bridge, B - Source Route Bridge
+                  S - Switch, H - Host, I - IGMP, r - Repeater, P - Phone
+Device ID    Local Intrfce   Holdtme    Capability   Platform    Port ID
+ASW5         Por 2            169            S       2960        Fas 0/2
+ASW5         Por 2            169            S       2960        Fas 0/5
+ASW5         Por 2            169            S       2960        Por 2
+MLS5         Gig 0/2          169                    3650        Gig 1/0/2
+MLS6         Gig 0/1          169                    3650        Gig 1/0/1
+ASW6         Por 1            169            S       2960        Fas 0/4
+ASW6         Por 1            169            S       2960        Por 1
+ASW6         Por 1            169            S       2960        Fas 0/1
+	2) % LLDP is not enabled
+------------------------------------------------------------------------------------------------------------------------
+3) CASE 3: Spanning-tree testing
+
+Command: In Privileged mode: show spanning-tree.
+ 
+The expected result: The output depends on the device, but expected to see a DSW6 as a Root Bridge.
+------------------------------------------------------------------------------------------------------------------------
+4) CASE 4: Default Gateway and VLAN connectivity:
+Command: 1) From PC try to ping another host in the same VLAN 
+	 2) From any device in VLAN45 try to ping 10.0.2.122 , 10.0.2.123, .124, .125, .126 (VIP)
+
+Expected result: Successful ping in each cases.
+------------------------------------------------------------------------------------------------------------------------
+5) CASE 5: Test for Internet connection, DHCP and DNS responses. 
+
+Command: 1)ipconfig /all or ipconfig /renew from any PC to check if DHCP messages is working.
+         2)Ping internet.com (10.0.0.86) from any PC.
+ 
+Expected results: 1)Successful DHCP and DNS responses. 
+		  2)Unsuccessful ping responses is expected.
+------------------------------------------------------------------------------------------------------------------------
+6) CASE 6: Test for connection between VLANs:
+
+Command: To test connection from any PC to the any other VLAN. ping pc1.vlanX.com , X - vlan number.
+
+Expected results: Successful ping to the VLAN20,40
+		  Unsuccessful ping to the VLAN10,30,50,60
+
+------------------------------------------------------------------------------------------------------------------------
+7)  CASE 7: Test to ping any remote server
+
+Command: Ping 10.0.0.226 (domain server. Can be any other Server) from any PC. 
+
+Expected result: Unsuccessful ping.
+------------------------------------------------------------------------------------------------------------------------
+8) CASE 8: SSH Connection from PC_ADMIN
+
+Command: From the PC_ADMIN try 'SSH -l *login* *IP or domain name of the host* ' command in command prompt to check SSH connectivity to the ASW6,DSW6 or MLS5/6. 
+
+Expected result: Successful connection with logging.
+		 If the brute force attempt detected(5 tries within 45 seconds) on MLS5/6 - block for a 2 minutes.
+		 SSH may be done only from PC_ADMIN, due to VTY-ACCESS-CLASS ACL.
+------------------------------------------------------------------------------------------------------------------------
+9)  CASE 9: NTP testing:
+
+Command: From the either ASW6,DSW6 or MLS5/6 try to check NTP status. In Privileged mode: show ntp associations /show ntp status.
+
+Expected example of output:
+(ASW5)
+
+address         ref clock       st   when     poll    reach  delay          offset            disp
+*~10.0.0.228    127.127.1.1     1    6        16      37     1.00           1.00              0.12
+------------------------------------------------------------------------------------------------------------------------
+10) CASE 10: File Transferring test
+
+Command: From the either ASW6,DSW6 or MLS5/6, try to download any file by TFTP or FTP. The (T)FTP server is 10.0.0.31. 
+In Privileged mode: copy flash: ftp: ; *filename*. 
+
+Expected result: Successful file transfer. (Need to wait a few minutes)
+
+
+------------------------------------------------------------------------------------------------------------------------
+11) Case 11: Syslog testing
+Command: From ASW6, DSW6 or MLS5/6 try to test if the Syslog UDP messages can go to the remote Syslog server (10.0.0.230).
+	 In Global configuration mode
+	 interface *any unused interface*  
+         no shutdown !enabling it 
+	 shutdown !disabling the interface to the default state
+
+Expected result: The new trap would be created and syslog message will appear on the remote server.
+------------------------------------------------------------------------------------------------------------------------
+
+
+
+|
+|
+LOWER
+\/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===================================================================================================================-------------------------------------------------------------------------------------------------------------------
+Section: Floor3: 10.0.3.0/24
+-------------------------------------------------------------------------------------------------------------------
+===================================================================================================================
+This floor contains three VLANs: VLAN50 (CEO) and VLAN60 (Data). 
+Protocol policy:
+- VTP: enabled (Domain: FLOOR3)
+- CDP: enabled
+- LLDP: enabled
+- RSTP: enabled (default)
+- EtherChannel: LACP (active mode)
+-------------------------------------------------------------------------------------------------------------------
+Floor3 Topology: 
+
+
+                  PO1
+(CLIENTS) -(ASW1)======(DSW1)-----(MLS1)\  
+             ||  \\  //       \ /        \ 
+         PO3 ||    xx PO2      X          (CORE)
+             ||  // \\        / \         /
+             || //   \\PO2   /   \       /
+(CLIENTS)-(ASW2)======(DSW2)-----(MLS2)/  
+                  PO1
+
+NOTE: 
+- ASW1 ↔ DSW2 = Port-Channel 2  
+- ASW2 ↔ DSW1 = Port-Channel 2
+- ASW1 ↔ ASW2 = Port-Channel 3 
+-------------------------------------------------------------------------------------------------------------------
+
+ CREDENTIALS 
+Device  | Admin Username | Password     | Secret (Privileged)
+--------|----------------|--------------|--------------------
+ASW1    | ASW1_ADMIN     | ASW1_UNICAL  | ASW1_UNICAL2
+--------+----------------+--------------+--------------------
+ASW2    | ASW2_ADMIN     | ASW2_UNICAL  | ASW2_UNICAL2
+--------+----------------+--------------+--------------------
+DSW1    | DSW1_ADMIN     | DSW1_UNICAL  | DSW1_UNICAL2
+--------+----------------+--------------+-------------------
+DSW2    | DSW2_ADMIN     | DSW2_UNICAL  | DSW2_UNICAL2
+--------+----------------+--------------+--------------------
+MLS1    | MLS1_ADMIN     | MLS1_UNICAL  | MLS1_UNICAL2
+--------+----------------+--------------+--------------------
+MLS2    | MLS2_ADMIN     | MLS2_UNICAL  | MLS2_UNICAL2
+-------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN50 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN50 uses the following IP range of addresses: 10.0.3.0/28, addresses 10.0.3.10, .11, .12, .13, .14 are reserved and cannot be assigned to the default clients. IP 10.0.3.10 is given to ASW1, 10.0.3.11 is given to DSW1, 10.0.3.12 is assigned to MLS2, 10.0.3.13 is given to MLS1. The address 10.0.3.14 is the default gateway.
+
+| VLAN | Subnet      | Gateway    | DHCP Range          | Reserved IPs |
+| ---- | ----------- | ---------- | ------------------- | ------------ |
+| 50   | 10.0.3.0/28 | 10.0.3.14  | 10.0.3.1-10.0.3.9   | 10-14        |
+
+
+2)The VLAN50 uses ports on both ASW1 and ASW2.
+
+ASW1:    
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN50)** | Fa0/10 (active), Fa0/11(inactive)                      |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan50 (10.0.3.10), Vlan1 (down)                       |
+
+--------------------------------------------------------------------------------
+                                                                         
+ASW2:
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN50)** | Fa0/10 (active), Fa0/11 (inactive)                     |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan50 (Unused), Vlan1 (down)                          |
+
+3)VLAN50 default gateway: 10.0.3.14.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.3.14         |
+| Active HSRP     | MLS1 - 10.0.3.13  |
+| Standby HSRP    | MLS2 - 10.0.3.12  |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN50 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN50 Clients can't access VLAN10, 45 and ping to the remote servers
+
+6)VLAN50 Special devices ( 10.0.3.10 (asw1.floor3.com),10.0.3.11 (dsw1.floor3.com), 10.0.3.12 (MLS2's SVI) and 10.0.3.13 (MLS1's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN50 is DSW2 and configured by lowering STP priority for this VLAN
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS1/2. 
+The direction is IN.
+
+Extended IP access list VL50
+    10 deny ip 10.0.3.0 0.0.0.14 10.0.1.0 0.0.0.127                        !denying VLAN10
+    20 deny ip 10.0.3.0 0.0.0.14 10.0.2.64 0.0.0.63                        !denying VLAN45
+    30 permit icmp 10.0.3.0 0.0.0.14 host 10.0.0.229                       !permitting ping to the PC_ADMIN, due to it is not a remote server
+    40 deny icmp 10.0.3.0 0.0.0.14 10.0.0.224 0.0.0.31                     !denying pinging and traceroutes to the servers
+    50 permit ip any any                                                   !permitting other traffic
+
+
+
+
+----------------------------------------Testing of VLAN50------------------------------------------------------
+
+1) CASE 1: Etherchannel and link status
+Command: In privileged mode: Show etherchannel summary / show spanning-tree (to see if there are no fastEthernets) / show ip interface brief
+
+Expected result: All needed interfaces should be UP/UP
+(ASW1)
+Number of channel-groups in use: 3
+Number of aggregators:           3
+
+Group  Port-channel  Protocol    Ports
+------+-------------+-----------+----------------------------------------------
+
+1      Po1(SU)           LACP   Fa0/1(P) Fa0/4(P) 
+2      Po2(SU)           LACP   Fa0/2(P) Fa0/5(P) 
+3      Po3(SU)           LACP   Fa0/3(P) Fa0/6(P) 
+
+-------------------------------------------------------------------------------------------------------------------
+2) CASE 2: Clarifying if CDP/LLDP is enabled:
+
+Command: In Privileged mode: show cdp neighbors / show lldp neighbors
+
+Expected result: 
+(ASW2)
+	1) Capability Codes: R - Router, T - Trans Bridge, B - Source Route Bridge
+                  S - Switch, H - Host, I - IGMP, r - Repeater, P - Phone
+Device ID    Local Intrfce   Holdtme    Capability   Platform    Port ID
+ASW1         Por 3            172            S       2960        Fas 0/3
+ASW1         Por 3            172            S       2960        Fas 0/6
+ASW1         Por 3            172            S       2960        Por 3
+DSW1         Por 2            172            S       2960        Fas 0/2
+DSW1         Por 2            172            S       2960        Fas 0/5
+DSW1         Por 2            172            S       2960        Por 2
+DSW2         Por 1            172            S       2960        Fas 0/4
+DSW2         Por 1            172            S       2960        Fas 0/1
+DSW2         Por 1            172            S       2960        Por 1
+	2) Capability codes:
+    (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device
+    (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other
+Device ID           Local Intf     Hold-time  Capability      Port ID
+DSW1                Po2            120        B               Fa0/2
+DSW1                Po2            120        B               Fa0/5
+ASW1                Po3            120        B               Fa0/3
+ASW1                Po3            120        B               Fa0/6
+DSW2                Po1            120        B               Fa0/1
+DSW2                Po1            120        B               Fa0/4
+
+-------------------------------------------------------------------------------------------------------------------
+
+3) CASE 3: Spanning-tree testing
+
+Command: In Privileged mode: show spanning-tree.
+ 
+The expected result: The output depends on the device, but expected to see a DSW2 as a Root Bridge.
+-------------------------------------------------------------------------------------------------------------------
+
+4) CASE 4: Default Gateway and VLAN connectivity:
+Command: 1) From PC try to ping another host in the same VLAN 
+	 2) From any device in VLAN50 try to ping 10.0.3.14 (VIP), 10.0.3.13, .12, .11 and 10.0.3.10.
+
+Expected result: Successful ping in both cases.
+-------------------------------------------------------------------------------------------------------------------
+
+5) CASE 5: Test for Internet connection, DHCP and DNS responses. 
+
+Command: 1)ipconfig /all or ipconfig /renew from any PC to check if DHCP messages is working.
+         2)Ping internet.com (10.0.0.86) from any PC.
+ 
+Expected results: 1)Successful DHCP responses and DNS responses. 
+		  2)Ping successful responses is expected.
+-------------------------------------------------------------------------------------------------------------------
+
+6) CASE 6: Test for connection between VLANs:
+
+Command: To test connection from any PC to the any other VLAN. ping pc1.vlanX.com , X - vlan number.
+
+Expected results: Successful ping to the VLAN20,30,40,50,60 and to the host 10.0.0.229
+		  Unsuccessful ping to the VLAN10,45 and network 10.0.0.224/27
+
+-------------------------------------------------------------------------------------------------------------------
+
+7)  CASE 7: Test to ping any remote server
+
+Command: Ping 10.0.0.226 (domain server. Can be any other Server) from any PC. 
+
+Expected result: Unsuccessful ping.
+-------------------------------------------------------------------------------------------------------------------
+
+8) CASE 8: SSH Connection from PC_ADMIN
+
+Command: From the PC_ADMIN try 'SSH -l *login* *IP or domain name of the host* ' command in command prompt to check SSH connectivity to the ASW1,ASW2, DSW1  or MLS1/2. 
+
+Expected result: Successful connection with logging.
+		 If the brute force attempt detected(5 tries within 45 seconds) on MLS5/6 - block for a 2 minutes.
+		 SSH may be done only from PC_ADMIN, due to VTY-ACCESS-CLASS ACL.
+-------------------------------------------------------------------------------------------------------------------
+
+9)  CASE 9: NTP testing:
+
+Command: From the either ASW1,ASW2,DSW1  or MLS1/2 try to check NTP status. In Privileged mode: show ntp associations /show ntp status.
+
+Expected example of output:
+(ASW1)
+
+address         ref clock       st   when     poll    reach  delay          offset            disp
+*~10.0.0.228    127.127.1.1     1    6        16      37     1.00           1.00              0.12
+-------------------------------------------------------------------------------------------------------------------
+
+10) CASE 10: File Transferring test
+
+Command: From the either ASW1,ASW2, DSW1 or MLS1/2, try to download any file by TFTP or FTP. The (T)FTP server is 10.0.0.31. 
+In Privileged mode: copy flash: ftp: ; *filename*. 
+
+Expected result: Successful file transfer. (Need to wait a few minutes)
+
+
+-------------------------------------------------------------------------------------------------------------------
+
+11) Case 11: Syslog testing
+Command: From ASW1, ASW2, DSW1 or MLS1/2 try to test if the Syslog UDP messages can go to the remote Syslog server (10.0.0.230).
+	 In Global configuration mode
+	 interface *any unused interface*  
+         no shutdown !enabling it 
+	 shutdown !disabling the interface to the default state
+
+Expected result: The new trap would be created and syslog message will appear on the remote server.
+-------------------------------------------------------------------------------------------------------------------
+
+	
+
+
+|
+|
+LOWER
+\/
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN60 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN60 uses the following IP range of addresses: 10.0.3.128/25, addresses 10.0.3.250, .251, .252, .253, .254 are reserved and cannot be assigned to the default clients. IP 10.0.3.250 is given to ASW2, 10.0.3.251 is given to DSW2, 10.0.3.252 is given to MLS2, 10.0.3.253 is given to MLS1. The address 10.0.3.254 is the default gateway.
+
+| VLAN | Subnet        | Gateway    | DHCP Range             | Reserved IPs |
+| ---- | -----------   | ---------- | -------------------    | ------------ |
+| 60   | 10.0.3.128/25 | 10.0.3.254 | 10.0.3.129-10.0.3.249  | 250-254      |
+
+
+2)The VLAN60 uses ports on both ASW1 and ASW2.
+
+ASW1:    
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN60)** | Fa0/12-13 (active), Fa0/14-24(inactive)                |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan60 (10.0.3.10), Vlan1 (down)                       |
+
+--------------------------------------------------------------------------------
+                                                                         
+ASW2:
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN60)** | Fa0/12-13 (active), Fa0/14-24(inactive)                |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan60 (Unused), Vlan1 (down)                          |
+
+3)VLAN60 default gateway: 10.0.3.254.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.3.254        |
+| Active HSRP     | MLS2 - 10.0.3.252 |
+| Standby HSRP    | MLS1 - 10.0.3.253 |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN60 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN60 Clients can't access VLAN10, 45 and the internet (internet.com)
+
+6)VLAN60 Special devices ( 10.0.3.250 (asw2.floor3.com),10.0.3.251 (dsw2.floor3.com), 10.0.3.252 (MLS2's SVI) and 10.0.3.253 (MLS1's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN60 is DSW2 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS1/2. 
+The direction is IN.
+
+Extended IP access list VL60
+    10 deny ip 10.0.3.128 0.0.0.127 host 10.0.0.86                           !denying internet
+    20 deny ip 10.0.3.128 0.0.0.127 10.0.1.0 0.0.0.127                       !denying VLAN10
+    30 deny ip 10.0.3.128 0.0.0.127 10.0.2.64 0.0.0.63                       !denying VLAN45
+    40 permit ip any any                                                     !permitting other traffic
+
+
+
+
+----------------------------------------Testing of VLAN60---------------------------------------------------------------
+
+1) CASE 1: Etherchannel and link status
+Command: In privileged mode: Show etherchannel summary / show spanning-tree (to see if there are no fastEthernets) / show ip interface brief
+
+Expected result: All needed interfaces should be UP/UP
+(ASW1)
+Number of channel-groups in use: 3
+Number of aggregators:           3
+
+Group  Port-channel  Protocol    Ports
+------+-------------+-----------+----------------------------------------------
+
+1      Po1(SU)           LACP   Fa0/1(P) Fa0/4(P) 
+2      Po2(SU)           LACP   Fa0/2(P) Fa0/5(P) 
+3      Po3(SU)           LACP   Fa0/3(P) Fa0/6(P) 
+
+------------------------------------------------------------------------------------------------------------------------
+2) CASE 2: Clarifying if CDP/LLDP is enabled:
+
+Command: In Privileged mode: show cdp neighbors / show lldp neighbors
+
+Expected result: 
+(DSW2)
+	1) Capability Codes: R - Router, T - Trans Bridge, B - Source Route Bridge
+                  S - Switch, H - Host, I - IGMP, r - Repeater, P - Phone
+Device ID    Local Intrfce   Holdtme    Capability   Platform    Port ID
+MLS2         Gig 0/1          148                    3650        Gig 1/0/1
+ASW1         Por 2            149            S       2960        Fas 0/5
+ASW1         Por 2            149            S       2960        Por 2
+ASW1         Por 2            149            S       2960        Fas 0/2
+MLS1         Gig 0/2          148                    3650        Gig 1/0/2
+ASW2         Por 1            149            S       2960        Fas 0/4
+ASW2         Por 1            149            S       2960        Fas 0/1
+ASW2         Por 1            149            S       2960        Por 1
+	2) Capability codes:
+    (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device
+    (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other
+Device ID           Local Intf     Hold-time  Capability      Port ID
+ASW2                Po1            120        B               Fa0/1
+ASW2                Po1            120        B               Fa0/4
+ASW1                Po2            120        B               Fa0/2
+ASW1                Po2            120        B               Fa0/5
+MLS1                Gig0/2         120        R               Gig1/0/2
+------------------------------------------------------------------------------------------------------------------------
+3) CASE 3: Spanning-tree testing
+
+Command: In Privileged mode: show spanning-tree.
+ 
+The expected result: The output depends on the device, but expected to see a DSW2 as a Root Bridge.
+------------------------------------------------------------------------------------------------------------------------
+4) CASE 4: Default Gateway and VLAN connectivity:
+Command: 1) From PC try to ping another host in the same VLAN 
+	 2) From any device in VLAN60 try to ping 10.0.3.254 (VIP), 10.0.3.253, .252, .251 and 10.0.3.250.
+
+Expected result: Successful ping in both cases.
+------------------------------------------------------------------------------------------------------------------------
+5) CASE 5: Test for Internet connection, DHCP and DNS responses. 
+
+Command: 1)ipconfig /all or ipconfig /renew from any PC to check if DHCP messages is working.
+         2)Ping internet.com (10.0.0.86) from any PC.
+ 
+Expected results: 1)Successful DHCP responses and DNS responses. 
+		  2)Unsuccessful ping responses is expected.
+------------------------------------------------------------------------------------------------------------------------
+6) CASE 6: Test for connection between VLANs:
+
+Command: To test connection from any PC to the any other VLAN. ping pc1.vlanX.com , X - vlan number.
+
+Expected results: Successful ping to the VLAN20,30,40,50,60 
+		  Unsuccessful ping to the VLAN10,45
+
+------------------------------------------------------------------------------------------------------------------------
+7)  CASE 7: Test to ping any remote server
+
+Command: Ping 10.0.0.226 (domain server. Can be any other Server) from any PC. 
+
+Expected result: Successful ping.
+------------------------------------------------------------------------------------------------------------------------
+8) CASE 8: SSH Connection from PC_ADMIN
+
+Command: From the PC_ADMIN try 'SSH -l *login* *IP or domain name of the host* ' command in command prompt to check SSH connectivity to the ASW1,ASW2, DSW2  or MLS1/2. 
+
+Expected result: Successful connection with logging.
+		 If the brute force attempt detected(5 tries within 45 seconds) on MLS5/6 - block for a 2 minutes.
+		 SSH may be done only from PC_ADMIN, due to VTY-ACCESS-CLASS ACL.
+------------------------------------------------------------------------------------------------------------------------
+9)  CASE 9: NTP testing:
+
+Command: From the either ASW1,ASW2,DSW2  or MLS1/2 try to check NTP status. In Privileged mode: show ntp associations /show ntp status.
+
+Expected example of output:
+(ASW2)
+
+address         ref clock       st   when     poll    reach  delay          offset            disp
+*~10.0.0.228    127.127.1.1     1    6        16      37     1.00           1.00              0.12
+------------------------------------------------------------------------------------------------------------------------
+10) CASE 10: File Transferring test
+
+Command: From the either ASW1,ASW2, DSW2 or MLS1/2, try to download any file by TFTP or FTP. The (T)FTP server is 10.0.0.31. 
+In Privileged mode: copy flash: ftp: ; *filename*. 
+
+Expected result: Successful file transfer. (Need to wait a few minutes)
+
+
+------------------------------------------------------------------------------------------------------------------------
+11) Case 11: Syslog testing
+Command: From ASW1, ASW2, DSW2 or MLS1/2 try to test if the Syslog UDP messages can go to the remote Syslog server (10.0.0.230).
+	 In Global configuration mode
+	 interface *any unused interface*  
+         no shutdown !enabling it 
+	 shutdown !disabling the interface to the default state
+
+Expected result: The new trap would be created and syslog message will appear on the remote server.
+------------------------------------------------------------------------------------------------------------------------
+
+
+|
+|
+LOWER
+\/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+======================================================================================================================
+----------------------------------------------------------------------------------------------------------------------
+Section: Basement 10.0.0.224/27
+----------------------------------------------------------------------------------------------------------------------
+======================================================================================================================
+
+This floor contains one VLAN: VLAN1. 
+Protocol policy:
+- VTP: disabled
+- CDP: enabled
+- LLDP: enabled
+- RSTP: enabled (default)
+- EtherChannel: disabled
+----------------------------------------------------------------------------------------------------------------------
+Basement Topology: 
+
+
+	(CLIENTS)-----(SW1)-----(R_B)===(CORE)
+
+
+NOTE: 
+The basement topology is very simplified, and have single point to failure. In the future, it needs of providing EtherChannel, 
+VLANS for better performance and secure, HSRP to have redundancy of failing the interfaces, and also I would added MultiLayer
+switch or realized it via ROAS. 
+In any case,I wanted to focus on a diversity of technologies on the Floor1,2 and 3. Also, I decided to make this
+minimalistic topology due to saving resources and better troubleshooting. So, consider this as a temporary decision.
+----------------------------------------------------------------------------------------------------------------------
+--- CREDENTIALS ---
+Device  | Admin Username | Password     | Secret (Privileged)
+--------|----------------|--------------|--------------------
+SW1     |  SW1_ADMIN     |  SW1_UNICAL  | SW1_UNICAL2
+R_B     | R_B_ADMIN      | R_B_UNICAL   | R_B_UNICAL2
+----------------------------------------------------------------------------------------------------------------------
+
+
+1)VLAN1 uses the following IP range of addresses: 10.0.0.224/27, addresses including 10.0.0.225 - .232 are reserved already. IP 10.0.0.232 is given to SW1,other devices use remaining addresses. 10.0.0.225 is assigned to default gateway. All addresses are Static. DHCP is NOT used.
+
+| VLAN | Subnet        | Gateway    | Remaining IPs|
+| ---- | -----------   | ---------- | ------------ |
+| 1    | 10.0.0.224/27 | 10.0.0.225 | 233-254      |
+
+
+2)The VLAN1 uses ports on  SW1
+
+SW1:
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Access (VLAN1)**  | Fa0/1-6 (active)				       |
+| **Unused / VLAN1**  | Gi0/2 (down) , Fa0/14-24(down)                         |
+| **SVI**             | Vlan1 (10.0.0.232), Vlan1 (down)                       |
+
+---
+ 
+
+3)VLAN1 default gateway: 10.0.0.225.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      |      -----        |
+| Active HSRP     | No HSRP           |
+| Standby HSRP    | No HSRP           |
+| HSRP Preemption | disabled          |
+
+
+
+4)VLAN1 Clients use local DNS server  (host 10.0.0.226). IP and other information assigns statically, they have to be fixed.
+
+5)VLAN1 Clients cannot access VLAN10, however DNS Server can response with TCP/UDP 53 messages outside of this VLAN.
+
+6)VLAN1 devices can access services such as (T)FTP, SSH, Syslog, DNS and NTP.
+
+7)The root bridge for the VLAN1 is SW1, due to it is single switch in this VLAN.
+
+8)The extended ACL is applied directly on the G0/1 interface on the R_B router.
+The direction is IN.
+
+Extended IP access list IN
+    10 permit ip 10.0.0.224 0.0.0.31 host 10.0.1.122                      !permit special devices of VLAN10 to use SSH, NTP,etc. 
+    20 permit ip 10.0.0.224 0.0.0.31 host 10.0.1.123 
+    30 permit ip 10.0.0.224 0.0.0.31 host 10.0.1.124
+    40 permit ip 10.0.0.224 0.0.0.31 host 10.0.1.125
+    50 permit udp host 10.0.0.226 eq domain 10.0.1.0 0.0.0.127            !permit TCP/UDP traffic with source port 53
+    60 permit tcp host 10.0.0.226 eq domain 10.0.1.0 0.0.0.127                                   
+    110 deny ip 10.0.0.224 0.0.0.31 10.0.1.0 0.0.0.127                    !deny other traffic to VLAN10
+    120 permit ip any any                                                 !permit other traffic
+
+
+
+-----------------------------------------------------------------------------------------------------------------------
+========
+SERVICES
+========
+-----------------------------------------------------------------------------------------------------------------------
+
+The basement provides services such as NTP, DNS, DHCP, 
+FTP, TFTP, Syslog and SNMP(Partly, due to Cisco Packet Tracer simplification).
+
+DNS Server IP Address: 10.0.0.226
+
+DHCP Server IP Address: 10.0.0.227
+
+NTP Server IP Address: 10.0.0.228
+
+PC_ADMIN (SSH Client) IP Address: 10.0.0.229
+
+Syslog Server IP Address: 10.0.0.230
+
+(T)FTP Server IP Address: 10.0.0.231
+
+SW1 (One of the SSH Servers) IP Address: 10.0.0.232
+
+--------------------------------------------------CREDENTIALS----------------------------------------------------------
+
+NTP with FTP uses authentication for its users. The password of NTP is encrypted.
+
+NTP: trusted-key: 1, password: LITVA
+
+FTP: username: ADMIN ; password: Floor_X - Full Access; 
+     username GUESTS; password: Floor1 - RO
+
+SNMP: RO key: FLOOR_X
+      RW key: ADMIN
+
+-----------------------------------------------------------------------------------------------------------------------
+----------------------------------------Testing of VLAN1---------------------------------------------------------------
+
+1) CASE 1: Link status
+Command: In privileged mode: show ip interface brief / show spanning-tree
+
+Expected result: All needed interfaces should be UP/UP
+------------------------------------------------------------------------------------------------------------------------
+2) CASE 2: Clarifying if CDP/LLDP enabled:
+
+Command: In Privileged mode: show cdp neighbors / show lldp neighbors
+
+Expected result:
+(SW1)
+ 	1) Capability Codes: R - Router, T - Trans Bridge, B - Source Route Bridge
+                  S - Switch, H - Host, I - IGMP, r - Repeater, P - Phone
+Device ID    Local Intrfce   Holdtme    Capability   Platform    Port ID
+R_B          Gig 0/1          147            R       C2900       Gig 0/1
+
+ 	2) Capability codes:
+    (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device
+    (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other
+Device ID           Local Intf     Hold-time  Capability      Port ID
+R_B                 Gig0/1         120        R               Gig0/1
+
+Total entries displayed: 1
+------------------------------------------------------------------------------------------------------------------------
+3) CASE 3: Spanning-tree testing
+
+Command: In Privileged mode: show spanning-tree.
+ 
+The expected result: The output depends on the device, but expected to see a SW1 as a Root Bridge.
+------------------------------------------------------------------------------------------------------------------------
+4) CASE 4: Default Gateway and VLAN connectivity:
+Command: 1) From PC try to ping another host in the same VLAN
+ 	 2) From any device in VLAN1 try to ping 10.0.0.225 .
+
+Expected result: Successful ping in both cases.
+------------------------------------------------------------------------------------------------------------------------
+5) CASE 5: Test for Internet connection, DHCP and DNS responses.
+
+Command: 1)ipconfig /all or ipconfig /renew from any PC to check if DHCP messages is working.
+         2)Ping internet.com (10.0.0.86) from any PC.
+ 
+Expected results: 1)Unsuccessful DHCP responses because of static config.
+ 		  2)Successful ping  and DNS responses is expected.
+------------------------------------------------------------------------------------------------------------------------
+6) CASE 6: Test for connection between VLANs:
+
+Command: To test connection from any PC to the any other VLAN. ping pc1.vlanX.com , X - vlan number.
+
+Expected results: Successful ping to the VLAN20,30,40,50,60
+ 		  Unsuccessful ping to the VLAN10,45
+
+------------------------------------------------------------------------------------------------------------------------
+7)  CASE 7: Test to ping any remote server
+
+Command: Ping 10.0.0.226 (domain server. Can be any other Server) from PC_ADMIN.
+
+Expected result: Successful ping.
+------------------------------------------------------------------------------------------------------------------------
+8) CASE 8: SSH Connection from PC_ADMIN
+
+Command: From the PC_ADMIN try 'SSH -l *login* *IP or domain name of the host* ' command in command prompt to check SSH connectivity to the SW1, R_B.
+Expected result: Successful connection with logging.
+ 		 If the brute force attempt detected(5 tries within 45 seconds) on R_B - block for a 2 minutes.
+ 		 SSH may be done only from PC_ADMIN, due to VTY-ACCESS-CLASS ACL.
+------------------------------------------------------------------------------------------------------------------------
+9)  CASE 9: NTP testing:
+
+Command: From the either SW1 or R_B try to check NTP status. In Privileged mode: show ntp associations /show ntp status.
+
+Expected example of output:
+(R_B)
+
+address         ref clock       st   when     poll    reach  delay          offset            disp
+*~10.0.0.228    127.127.1.1     1    6        16      37     1.00           1.00              0.12
+------------------------------------------------------------------------------------------------------------------------
+10) CASE 10: File Transferring test
+
+Command: From the either SW1 or R_B, try to download any file by TFTP or FTP. The (T)FTP server is 10.0.0.31.
+In Privileged mode: copy flash: ftp: ; *filename*.
+
+Expected result: Successful file transfer. (Need to wait a few minutes)
+
+
+------------------------------------------------------------------------------------------------------------------------
+11) Case 11: Syslog testing
+Command: From SW1 or R_B try to test if the Syslog UDP messages can go to the remote Syslog server (10.0.0.230).
+ 	 In Global configuration mode
+ 	 interface *any unused interface*
+         no shutdown !enabling it
+ 	 shutdown !disabling the interface to the default state
+
+Expected result: The new trap would be created and syslog message will appear on the remote server.
+------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+|
+|
+LOWER
+\/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=======================================================================================================================
+-----------------------------------------------------------------------------------------------------------------------
+Section: CORE
+-----------------------------------------------------------------------------------------------------------------------
+=======================================================================================================================
+
+This level is a Routing Core of a whole network and has no any VLANs, due to it uses IP routing. .
+Simplified CORE Topology (_X and _Y) - Indexes of MLS:
+
+
+            /----------------------------------------------------------------------------------------\
+            |                                                                                        |
+            |                                         (R_INT)                                        |
+  	    |						 |                                           |
+	    |						 |                                           |
+            |						 |                                           |
+            |				/---------------(R1)----------------\                        |
+	    |				|	       /   \		    |			     |	
+	    |				|	      /     \               |                        |
+            | /--------------------(MLS_L3_2)        /       \            (R_B)-----(BASEMENT)       |
+	    | | 	     	     |	|           /  AREA0  \             |                        |
+	    | |		     	     |  |          /           \            |                        | 
+       /--(MLS_Y)           	     |	\-------(R2)----------(R3)----------/	                     |
+       |        	     	     |		  \	      /                                      |
+(FLOOR_ANY)     /--------------------/             \         /                                       |
+       \---(MLS_X)                                  (MLS_L3_1)                                       |
+             |                                       |     |                                         |
+             \---------------------------------------/     \-----------------------------------------/
+ 	                                                    
+                                                            
+      
+NOTE: 
+
+The CORE topology uses Default SPINE-Leaf architecture, where MLS_L3_2 and MLS_L3_1 are Spine and Floor_ANY with its MLS_X and
+MLS_Y are leafs,which connected to the Spines (MLS_L3_1 and MLS_L3_2). MLS_L3_1 and MLS_L3_2 is not directly connected.
+Also each MLS connects to the 1 shared and 1 different router to provide better redundancy. The routers (R1,R2 and R3) are connected
+between each other. 
+
+On the Core layer are no any ACL, Spanning-tree or broadcast, to provide fast performance of the network and routing process.
+R_INT is connected directly to the R1. I decided to do it, due to R_INT was created only to demonstrate internet connection.
+It has a weak point, so, it is recommended to connect it to the other routers. 
+
+--- CREDENTIALS -----------------------------------------------------------------------------------------------------------
+Device    | Admin Username | Password        | Secret (Privileged)
+----------|----------------|-----------------|--------------------
+R1        | R1_ADMIN       | R1_UNICAL       | R1_UNICAL2
+R2        | R2_ADMIN       | R2_UNICAL       | R2_UNICAL2
+R3        | R3_ADMIN       | R3_UNICAL       | R3_UNICAL2
+R_B       | R_B_ADMIN      | R_B_UNICAL      | R_B_UNICAL2
+R_INT     | R_INT_ADMIN    | R_INT_UNICAL    | R_INT_UNICAL2
+MLS_L3_1  | MLS_L3_1_ADMIN | MLS_L3_1_UNICAL | MLS_L3_1_UNICAL2
+MLS_L3_2  | MLS_L3_2_ADMIN | MLS_L3_2_UNICAL | MLS_L3_2_UNICAL2
+
+---------------------------------------------------------------------------------------------------------------------------
+
+IP range of CORE:
+ 
+P2P links from 10.0.0.0/30 up to 10.0.0.84/30
+
+       ------------------------------------------------------------
+       |DEVICE     | Interfaces  | IP Address | Network Addr., /30|     
+       |-----------+-------------+------------+-------------------|
+       |           |   G0/0/0    | 10.0.0.74  |  10.0.0.72        |
+       |           |   G0/1/0    | 10.0.0.77  |  10.0.0.76        |
+       |    R1     |   G0/0      | 10.0.0.85  |  10.0.0.84        |
+       |           |   G0/1      | 10.0.0.61  |  10.0.0.60        |
+       |           |   G0/2      | 10.0.0.70  |  10.0.0.68        |
+       |-----------+-------------+------------+-------------------|
+       |           |   G0/0/0    | 10.0.0.73  |  10.0.0.72        |
+       |           |   G0/1/0    | 10.0.0.53  |  10.0.0.52        |
+       |    R2     |   G0/0      | 10.0.0.65  |  10.0.0.64        |
+       |           |   G0/1      | 10.0.0.58  |  10.0.0.56        | 
+       |-----------+-------------+------------+-------------------|
+       |           |   G0/0/0    | 10.0.0.81  |  10.0.0.80        |
+       |           |   G0/1/0    | 10.0.0.50  |  10.0.0.48        |
+       |    R3     |   G0/0      | 10.0.0.66  |  10.0.0.64        |
+       |           |   G0/2      | 10.0.0.69  |  10.0.0.68        | 
+       |-----------+-------------+------------+-------------------|
+       |           |   G0/0/0    | 10.0.0.82  |  10.0.0.80        |
+       |    R_B    |   G0/1/0    | 10.0.0.78  |  10.0.0.76        |      
+       |-----------+-------------+------------+-------------------|
+       |    R_INT  |   G0/0      | 10.0.0.86  |  10.0.0.84        |
+       |-----------+-------------+------------+-------------------|
+       |           |   G1/0/3    | 10.0.0.10  |  10.0.0.8         |
+       |    MLS1   |   G1/1/4    | 10.0.0.41  |  10.0.0.40        |
+       |-----------+-------------+------------+-------------------|
+       |           |   G1/0/3    | 10.0.0.6   |  10.0.0.4         |
+       |    MLS2   |   G1/1/4    | 10.0.0.46  |  10.0.0.44        |
+       |-----------+-------------+------------+-------------------|
+       |           |   G1/0/3    | 10.0.0.33  |  10.0.0.32        |
+       |    MLS3   |   G1/1/4    | 10.0.0.17  |  10.0.0.16        |
+       |-----------+-------------+------------+-------------------|
+       |           |   G1/0/3    | 10.0.0.37  |  10.0.0.36        |
+       |    MLS4   |   G1/1/4    | 10.0.0.14  |  10.0.0.12        |
+       |-----------+-------------+------------+-------------------|
+       |           |   G1/0/3    | 10.0.0.25  |  10.0.0.24        |
+       |    MLS5   |   G1/1/4    | 10.0.0.1   |  10.0.0.0         |
+       |-----------+-------------+------------+-------------------|
+       |           |   G1/0/3    | 10.0.0.29  |  10.0.0.28        |
+       |    MLS6   |   G1/1/4    | 10.0.0.21  |  10.0.0.20        |
+       |-----------+-------------+------------+-------------------|
+       |           |   G1/0/1    | 10.0.0.34  |  10.0.0.32        |
+       |           |   G1/0/2    | 10.0.0.38  |  10.0.0.36        |
+       |           |   G1/0/3    | 10.0.0.30  |  10.0.0.28        |
+       |           |   G1/0/4    | 10.0.0.26  |  10.0.0.24        |
+       |  MLS_L3_1 |   G1/1/1    | 10.0.0.42  |  10.0.0.40        |
+       |           |   G1/1/2    | 10.0.0.45  |  10.0.0.44        |
+       |           |   G1/1/3    | 10.0.0.49  |  10.0.0.48        |
+       |           |   G1/1/4    | 10.0.0.54  |  10.0.0.52        |
+       |-----------+----------------------------------------------|
+       |           |   G1/0/1    | 10.0.0.9   |  10.0.0.8         |
+       |           |   G1/0/2    | 10.0.0.5   |  10.0.0.4         |
+       |           |   G1/0/3    | 10.0.0.57  |  10.0.0.56        |
+       |           |   G1/0/4    | 10.0.0.62  |  10.0.0.60        |
+       |  MLS_L3_2 |   G1/1/1    | 10.0.0.2   |  10.0.0.0         |
+       |           |   G1/1/2    | 10.0.0.22  |  10.0.0.20        |
+       |           |   G1/1/3    | 10.0.0.18  |  10.0.0.16        |
+       |           |   G1/1/4    | 10.0.0.13  |  10.0.0.12        |
+       ------------+-----------------------------------------------
+
+
+
+---------------------------------------------------------------------------------------------------------------------------
+===========================================================================================================================
+OSPF Section
+===========================================================================================================================
+---------------------------------------------------------------------------------------------------------------------------
+
+1) Devices ID:
+        --------------------------------------------
+	|DEVICE Hostname  | IP of the loopback/ RID|
+	|-----------------+------------------------|
+	| R1		  |       3.1.1.2          |
+        |-----------------+------------------------|
+	| R2		  |       3.2.2.2          |
+        |-----------------+------------------------|
+	| R3		  |       3.3.3.3          |
+        |-----------------+------------------------|
+	| R_B 		  |       3.0.0.0          |
+        |-----------------+------------------------|
+	| R_INT		  |       NOT USED IN OSPF |
+        |-----------------+------------------------|
+	| MLS1            |       2.1.1.1          |
+        | ----------------+------------------------+
+	| MLS2            |       2.2.2.2          |
+        | ----------------+------------------------+
+	| MLS3            |       2.3.3.3          |
+        | ----------------+------------------------+
+	| MLS4            |       2.4.4.4          |
+        | ----------------+------------------------+
+	| MLS5            |       2.5.5.5          |
+        | ----------------+------------------------+
+	| MLS6            |       2.6.6.6          |
+        | ----------------+------------------------+
+	| MLS_L3_1        |       3.5.5.5          |
+        | ----------------+------------------------+
+	| MLS_L3_2        |       3.4.4.4          |
+        --------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------
+ 2) OSPF Configuration:
+
+	2_1) OSPF uses auto-cost reference-bandwith 10000 for better route calculation
+
+	2_2) OSPF ASBR is R1, due to it shares its default static route (0.0.0.0/0 via 10.0.0.86) to the internet via Default-information originate 
+
+	2_3) AREA 0 uses neither PPP or Broadcast type connection of OSPF, each collision has its DR and BDR router.
+	     MLS_L3_1 and MLS_L3_2 are fully DR.
+
+	2_4) AREA 0 uses MD5 authentication for each router, including MLS. The password is OSPF_PASSWORD
+
+	2_5) Each router of Layer3 Core uses OSPF directly on the interfaces. However, the MLS which belongs to the floors (MLS1-6),
+	     shares their routes by default network origination. (Cisco Packet Tracer didn't want to apply OSPF directly on the SVI)
+
+	2_6) From 2_5) statement, it means that routers have passive interface as the default. And only special interfaces can
+	     send and receive OSPF messages.
+
+	2_7) Router with hostname R_INT is not running OSPF. It has only one configured static route to show if Internet
+	     connection works properly. There are no sense of using non-static routing in this case.
+
+3) OSPF Neighborship :
+	---------------------------------------------------
+	| Hostname        | Amount , OSPF Neighbor        | 
+	|		  |                               |
+	|-----------------+----------------------------   |
+	| R1		  | 4, R2, R3, R_B, MLS_L3_2      |
+        |-----------------+----------------------------   |
+	| R2		  | 4, R1, R3 MLS_L3_2, MLS_L3_1  |
+        |-----------------+-------------------------------|
+	| R3		  | 4, R1, R2, R_B, MLS_L3_1      |              
+        |-----------------+-------------------------------|
+	| R_B 		  | 2, R1, R3                     |            
+        |-----------------+-------------------------------|
+	| R_INT		  |       -------     		  |
+        |-----------------+-------------------------------|
+	| MLS1            | 2, MLS_L3_1, MLS_L3_2         |             
+        | ----------------+-------------------------------|
+	| MLS2            | 2, MLS_L3_1, MLS_L3_2         |     
+        | ----------------+-------------------------------|
+	| MLS3            | 2, MLS_L3_1, MLS_L3_2  	  |
+        | ----------------+-------------------------------|
+	| MLS4            | 2, MLS_L3_1, MLS_L3_2	  |              
+        | ----------------+-------------------------------|
+	| MLS5            | 2, MLS_L3_1, MLS_L3_2         |
+        | ----------------+-------------------------------|
+	| MLS6            | 2, MLS_L3_1, MLS_L3_2         |
+        | ----------------+-------------------------------|
+	| MLS_L3_1        | 8, R2, R3, MLS1-6             |
+        | ----------------+-------------------------------|
+	| MLS_L3_2        | 8, R1, R2, MLS1-6		  |          
+        ---------------------------------------------------
+
+
+
+----------------------------------------------------------CORE Testing--------------------------------------------------------
+
+1) CASE 1: Interface and link status:
+
+   Command: on the any device of the core, from Privileged exec mode: show ip interface brief
+								      show cdp neighbors 
+   Expected result of the second command: 
+	(R1)
+	Capability Codes: R - Router, T - Trans Bridge, B - Source Route Bridge
+	                  S - Switch, H - Host, I - IGMP, r - Repeater, P - Phone
+	Device ID    Local Intrfce   Holdtme    Capability   Platform    Port ID
+	R3           Gig 0/2          147            R       C2900       Gig 0/2
+	MLS_L3_2     Gig 0/1          147                    3650        Gig 1/0/4
+	R_B          Gig 0/1/0        147            R       C2900       Gig 0/1/0
+	R2           Gig 0/0/0        147            R       C2900       Gig 0/0/0
+	R_INT        Gig 0/0          148            R       C2900       Gig 0/0
+
+------------------------------------------------------------------------------------------------------------------------------	
+
+2) CASE 2: IP address and routing status:
+
+   Command: on the any device of the core, or any device who can send ICMP ping requests without policy issues, try:
+									ping *IP address*
+									show ip route !from the device to check which route does it has								
+
+   Expected results: Successful ping
+
+------------------------------------------------------------------------------------------------------------------------------
+
+3) CASE 3: OSPF clarifying:
+
+   Commands: to clarify if OSPF works properly, run these commands only on the CORE devices or from SSH: 
+	show ip protocol
+	show ip ospf 
+	show ip ospf neighbor 
+	show ip ospf database
+	show ip ospf interface
+   Expected result of one of the commands:
+	(R1)#show ip ospf neighbor
+
+	Neighbor ID     Pri   State           Dead Time   Address         Interface
+	3.0.0.0           1   FULL/BDR        00:00:39    10.0.0.78       GigabitEthernet0/1/0
+	3.4.4.4           1   FULL/DR         00:00:38    10.0.0.62       GigabitEthernet0/1
+	3.3.3.3           1   FULL/DR         00:00:39    10.0.0.69       GigabitEthernet0/2
+	3.2.2.2           1   FULL/DR         00:00:39    10.0.0.73       GigabitEthernet0/0/0
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+4) CASE 4: NTP status
+	
+   Commands: To check NTP status on CORE device,from Privileged exec mode use: show ntp status ,  show ntp associations
+	
+   Expected output: (R1)
+
+   address         ref clock       st   when     poll    reach  delay          offset            disp
+*~10.0.0.228    127.127.1.1     1    5        16      375    1.00           0.00              0.24
+ * sys.peer, # selected, + candidate, - outlyer, x falseticker, ~ configured
+
+---------------------------------------------------------------------------------------------------------------------------------
+
+5) CASE 5: Check SSH and Brute Force method:
+
+   Commands: 1) From any non-PC_ADMIN, try: SSH -l *Username of the device* *IP Address*. 
+	     2) From PC_ADMIN in Basement, try: SSH -l *Username of the device* *IP Address*
+             3) From PC_ADMIN after valid logging, try to finish SSH connection by *exit*, and after try to login 5 times, 
+             but with either wrong Username or Password
+
+   Expected results: 1)(VLAN50 PC) SSH -l MLS3_ADMIN 10.0.0.33 
+
+			% Connection refused by remote host
+
+		     2) C:\>SSH -l MLS3_ADMIN 10.0.0.17
+
+			Password: 
+
+
+			----------------------------------------------------------------------------------
+			ATTENTION! EACH ACTION IS LOGGED AND UNAUTHORIZED USAGE IS FORBIDDEN
+			----------------------------------------------------------------------------------
+
+
+			MLS3>en
+			Password: 
+			MLS3#
+			
+		     3)SSH -l MLS3_ADM 10.0.0.17
+
+		       % Connection refused by remote host
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+6) CASE 6: Check TFTP / FTP Status: From the any device, try to download any file by TFTP or FTP. The (T)FTP server is 10.0.0.31.
+In Privileged mode: *copy flash: ftp:* / *copy flash: tftp:*
+		    *filename*.
+
+Expected result: Successful file transfer. (Need to wait a few minutes)
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+7) CASE 7: Syslog checking:
+
+   Command: From any device of the CORE, try to test if the Syslog UDP messages can go to the remote Syslog server (10.0.0.230).
+	    1) To create trap message, try to login successfully, with correct Username and Password.
+	    2) To create trap message, try to login with wrong Username or Password.
+   
+   Expected results: In both cases, trap message will appear in Syslog server.
+
+

@@ -1,0 +1,527 @@
+Project: project_pkt1
+Made by: Dmytro Siarkevych
+Date: 17.02.2026
+
+
+
+---------------------------------------------------------------------------------------------------------------------
+=====================================================================================================================
+VLANs
+=====================================================================================================================
+---------------------------------------------------------------------------------------------------------------------
+
+Note: The full documentation you can read in Full_Document_PKT1.txt
+
+
+
+---------------------------------------------------------------------------------------------------------------------
+VLAN1
+---------------------------------------------------------------------------------------------------------------------
+
+1)VLAN1 uses the following IP range of addresses: 10.0.0.224/27, addresses including 10.0.0.225 - .232 are reserved already. IP 10.0.0.232 is given to SW1,other devices use remaining addresses. 10.0.0.225 is assigned to default gateway. All addresses are Static. DHCP is NOT used.
+
+| VLAN | Subnet        | Gateway    | Remaining IPs|
+| ---- | -----------   | ---------- | ------------ |
+| 1    | 10.0.0.224/27 | 10.0.0.225 | 233-254      |
+
+
+2)The VLAN1 uses ports on  SW1
+
+SW1:
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Access (VLAN1)**  | Fa0/1-6 (active)				       |
+| **Unused / VLAN1**  | Gi0/2 (down) , Fa0/14-24(down)                         |
+| **SVI**             | Vlan1 (10.0.0.232), Vlan1 (down)                       |
+
+ 
+
+3)VLAN1 default gateway: 10.0.0.225.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      |      -----        |
+| Active HSRP     | No HSRP           |
+| Standby HSRP    | No HSRP           |
+| HSRP Preemption | disabled          |
+
+
+
+4)VLAN1 Clients use local DNS server  (host 10.0.0.226). IP and other information assigns statically, they have to be fixed.
+
+5)VLAN1 Clients cannot access VLAN10, however DNS Server can response with TCP/UDP 53 messages outside of this VLAN.
+
+6)VLAN1 devices can access services such as (T)FTP, SSH, Syslog, DNS and NTP.
+
+7)The root bridge for the VLAN1 is SW1, due to it is single switch in this VLAN.
+
+8)The extended ACL is applied directly on the G0/1 interface on the R_B router.
+The direction is IN.
+
+Extended IP access list IN
+    10 permit ip 10.0.0.224 0.0.0.31 host 10.0.1.122                      !permit special devices of VLAN10 to use SSH, NTP,etc. 
+    20 permit ip 10.0.0.224 0.0.0.31 host 10.0.1.123 
+    30 permit ip 10.0.0.224 0.0.0.31 host 10.0.1.124
+    40 permit ip 10.0.0.224 0.0.0.31 host 10.0.1.125
+    50 permit udp host 10.0.0.226 eq domain 10.0.1.0 0.0.0.127            !permit TCP/UDP traffic with source port 53
+    60 permit tcp host 10.0.0.226 eq domain 10.0.1.0 0.0.0.127                                   
+    110 deny ip 10.0.0.224 0.0.0.31 10.0.1.0 0.0.0.127                    !deny other traffic to VLAN10
+    120 permit ip any any                                                 !permit other traffic
+
+
+
+	|
+	|
+	V
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN10 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN10 uses the following IP range of addresses: 10.0.1.0/25, however addresses 10.0.1.122, .123, .124, .125 and .126 are reserved and cannot be assigned to the default clients. IP 10.0.1.122 is given to ASW3, .123 is given to DSW3. 10.0.1.124 — MLS4 and 10.0.1.125 — MLS3.
+
+| VLAN | Subnet      | Gateway    | DHCP Range          | Reserved IPs |
+| ---- | ----------- | ---------- | ------------------- | ------------ |
+| 10   | 10.0.1.0/25 | 10.0.1.126 | 10.0.1.1-10.0.1.121 | 122–126      |
+
+
+2)The VLAN10 uses ports only on ASW3. For clients Fa0/7-F0/24 including.
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/3                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/4                                           |
+| **Access (VLAN10)** | Fa0/7-Fa0/9 (active), Fa0/10-24 (inactive)             |
+| **Unused / VLAN1**  | Fa0/5(down), Fa0/6(down), Gi0/1(down), Gi0/2 (down)    |
+| **SVI**             | Vlan10 (10.0.1.122), Vlan1 (down)                      |
+
+
+3)VLAN10 default gateway: 10.0.1.126.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.1.126        |
+| Active HSRP     | MLS3 - 10.0.1.125 |
+| Standby HSRP    | MLS4 - 10.0.1.124 |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN10 Clients use local DHCP server(MLS3) and remote DNS server (host 10.0.0.226).
+
+5)VLAN10 Clients are allowed to use internet(host 10.0.0.86) and DNS resolution (UDP/TCP 53), but are not allowed to directly access or reach the DNS server (ICMP, TCP other than 53 is denied)
+
+6)VLAN10 Special devices (10.0.1.122 (asw3.floor1.com), 10.0.1.123 (dsw3.floor1.com), 10.0.1.124 (MLS4's SVI) and 10.0.1.125 (MLS3's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN10 is DSW3 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS3/4. 
+The direction is IN.
+
+
+Extended IP access list VLAN_10
+    10 permit udp any any eq bootpc                                ! Permitting DHCP Server and Clients messages
+    20 permit udp any any eq bootps 
+    30 permit ip 10.0.1.0 0.0.0.127 host 10.0.0.86                 ! Permitting internet access, Internet is host 10.0.0.86
+    40 permit tcp 10.0.1.0 0.0.0.127 host 10.0.0.226 eq domain     ! Permitting DNS TCP/UDP 53 messages
+    50 permit udp 10.0.1.0 0.0.0.127 host 10.0.0.226 eq domain
+    60 permit ip host 10.0.1.125 any                               ! permitting infrastructure-originated traffic 
+    70 permit ip host 10.0.1.124 any 				   ! (management/control-plane simplification
+    80 permit ip host 10.0.1.122 10.0.0.224 0.0.0.31               ! Permitting to ASW3 and DSW3 connectivity to the Basement 
+    90 permit ip host 10.0.1.123 10.0.0.224 0.0.0.31 
+    100 deny ip any any                                            !deny other traffic / to monitor how many packets were denied 
+
+
+
+	|
+	|
+	V
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN20 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN20 uses the following IP range of addresses: 10.0.1.224/27. Addresses 10.0.1.250, .251, .252, .253 and .254 are reserved and cannot be assigned to the default clients. IP 10.0.1.250 is given to ASW4, .251 is given to DSW4. 10.0.1.253 — MLS4 and 10.0.1.252 — MLS3.
+
+| VLAN | Subnet        | Gateway    | DHCP Range            | Reserved IPs |
+| ---- | -----------   | ---------- | --------------------- | ------------ |
+| 20   | 10.0.1.224/27 | 10.0.1.254 | 10.0.1.225-10.0.1.249 | 250-254      |
+
+
+2)The VLAN20 uses ports only on ASW4. For clients Fa0/7-F0/24 including.
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/3                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/4                                           |
+| **Access (VLAN20)** | Fa0/7-Fa0/9 (active), Fa0/10-24 (inactive)             |
+| **Unused / VLAN1**  | Fa0/5(down), Fa0/6(down), Gi0/1(down), Gi0/2 (down)    |
+| **SVI**             | Vlan20 (10.0.1.250), Vlan1 (down)                      |
+
+
+3)VLAN20 default gateway: 10.0.1.254.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.1.254        |
+| Active HSRP     | MLS4 - 10.0.1.253 |
+| Standby HSRP    | MLS3 - 10.0.1.252 |
+| HSRP Preemption | Enabled           |
+
+
+4)VLAN20 Clients use remote DHCP server(host 10.0.0.227) and remote DNS server (host 10.0.0.226).
+
+5)VLAN20 Clients can't access internet.com, VLAN10 and VLAN30.
+
+6)VLAN20 Special devices (10.0.1.250 (asw4.floor1.com), 10.0.1.251 (dsw4.floor1.com), 10.0.1.252 (MLS3's SVI) and 10.0.1.253 (MLS4's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN20 is DSW4 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS3/4. 
+The direction is IN.
+
+Extended IP access list VLAN_20
+    10 permit ip host 10.0.1.253 any                        !permitting infrastructure-originated traffic
+    20 permit ip host 10.0.1.252 any 
+    30 deny ip 10.0.1.224 0.0.0.31 host 10.0.0.86           !denying the internet connectivity
+    40 deny ip 10.0.1.224 0.0.0.31 10.0.1.0 0.0.0.127       !denying the VLAN10
+    50 deny ip 10.0.1.224 0.0.0.31 10.0.2.0 0.0.0.63        !denying the VLAN30
+    60 permit ip any any                                    !permitting other traffic
+
+
+
+
+	|
+	|
+	V
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN30 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN30 uses the following IP range of addresses: 10.0.2.0/26, addresses 10.0.2.61, .62, .63 are reserved and cannot be assigned to the default clients. IP 10.0.2.60 is given to MLS5, 10.0.2.61 is given to MLS6. The address 10.0.2.62 is the default gateway.
+
+| VLAN | Subnet      | Gateway    | DHCP Range          | Reserved IPs |
+| ---- | ----------- | ---------- | ------------------- | ------------ |
+| 30   | 10.0.2.0/26 | 10.0.2.62  | 10.0.2.1-10.0.2.59  | 60-62        |
+
+
+2)The VLAN30 uses ports only on ASW5. For clients F0/10-12 including.
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN30)** | Fa0/10 (active), Fa0/11–12 (inactive)                  |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan30 (Unused), Vlan1 (down)                          |
+                                                                         
+
+3)VLAN30 default gateway: 10.0.2.62.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.2.62         |
+| Active HSRP     | MLS5 - 10.0.2.60  |
+| Standby HSRP    | MLS6 - 10.0.2.61  |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN30 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN30 Clients can't access VLAN10 and VLAN20
+
+6)VLAN30 Special devices ( 10.0.2.62 (MLS6's SVI) and 10.0.2.61 (MLS5's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN30 is DSW5 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS5/6. 
+The direction is IN.
+
+Extended IP access list VL30
+    10 deny ip 10.0.2.0 0.0.0.63 10.0.1.0 0.0.0.127             !denying the VLAN10
+    15 deny ip 10.0.2.0 0.0.0.63 10.0.1.224 0.0.0.31            !denying the VLAN20
+    20 permit ip any any                                        !permitting others
+
+
+
+	|
+	|
+	V
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN40 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN40 uses the following IP range of addresses: 10.0.2.128/25, addresses 10.0.2.250, .251, .252, .253 and .254 are reserved and cannot be assigned to the default clients. 
+IP 10.0.2.250 is given to ASW5, 10.0.2.251 is given to DSW5. The addresses 10.0.2.252 - MLS6, 10.0.2.253 - MLS5. 
+The address 10.0.2.254 is the default gateway.
+
+| VLAN | Subnet       | Gateway    | DHCP Range             | Reserved IPs |
+| ---- | -----------  | ---------- | -------------------    | ------------ |
+| 40   | 10.0.2.128/25| 10.0.2.254 | 10.0.2.129-10.0.2.249  | 250-254      |
+
+
+2)The VLAN40 uses ports on both ASW5 and ASW6.
+
+ASW5:    
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN40)** | Fa0/13-14 (active), Fa0/15–24 (inactive)               |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan40 (10.0.2.250), Vlan1 (down)                      |
+
+--------------------------------------------------------------------------------
+                                                                         
+ASW6:
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN40)** | Fa0/13-14 (active), Fa0/15–24 (inactive)               |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan40 (Unused), Vlan1 (down)                          |
+
+
+3)VLAN40 default gateway: 10.0.2.254.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.2.254        |
+| Active HSRP     | MLS6 - 10.0.2.252 |
+| Standby HSRP    | MLS5 - 10.0.2.253 |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN40 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN40 Clients can't access VLAN10.
+
+6)VLAN40 Special devices (10.0.2.250 (ASW5.floor2.com), 10.0.2.251 (DSW5.floor2.com) , 10.0.2.252 (MLS6's SVI) and 10.0.2.253 (MLS5's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN40 is DSW5 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS5/6. 
+The direction is IN.
+
+Extended IP access list VL40
+    10 deny ip 10.0.2.128 0.0.0.127 10.0.1.0 0.0.0.127                       !denying VLAN10
+    20 permit ip any any                                                     !permitting other traffic
+
+
+
+	|
+	|
+	V
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN45 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN45 uses the following IP range of addresses: 10.0.2.64/26, addresses 10.0.2.126, .125, .124, .123 and .122 are reserved and cannot be assigned to the default clients. 
+IP 10.0.2.122 is given to ASW6, 10.0.2.123 is given to DSW6. The addresses 10.0.2.124 - MLS6, 10.0.2.125 - MLS5. 
+The address 10.0.2.126 is the default gateway.
+
+| VLAN | Subnet       | Gateway    | DHCP Range             | Reserved IPs |
+| ---- | -----------  | ---------- | -------------------    | ------------ |
+| 45   | 10.0.2.64/26 | 10.0.2.126 | 10.0.2.65 - 10.0.2.121 | 122-126      |
+
+
+2)The VLAN45 uses ports only on ASW6.
+                                                                      
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN45)** | Fa0/10 (active), Fa0/11–12 (inactive)                  |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan45 (10.0.2.122), Vlan1 (down)                      |
+
+
+3)VLAN45 default gateway: 10.0.2.126.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.2.126        |
+| Active HSRP     | MLS6 - 10.0.2.124 |
+| Standby HSRP    | MLS5 - 10.0.2.125 |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN45 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN45 Clients can access only to the VLAN20, 40.
+
+6)VLAN45 Special devices (10.0.2.122 (ASW6.floor2.com), 10.0.2.123 (DSW6.floor2.com) , 10.0.2.124 (MLS6's SVI) and 10.0.2.125 (MLS5's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN45 is DSW6 and configured as by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS5/6. 
+The direction is IN.
+
+Extended IP access list VL45
+     5 permit ip host 10.0.2.122 any                                       !permitting special devices to use services, TFTP, !!FTP, SSH, etc.
+    10 permit ip host 10.0.2.123 any                                       
+    20 permit ip host 10.0.2.124 any                                       !permitting infrastructure-originated traffic 
+    30 permit ip host 10.0.2.125 any                                       
+    40 permit ip 10.0.2.64 0.0.0.63 10.0.1.224 0.0.0.31                    !permitting VLAN20
+    50 permit ip 10.0.1.224 0.0.0.31 10.0.2.64 0.0.0.63                    !permitting VLAN20(Dead part of the code, isn't 										   !working)
+    60 permit ip 10.0.2.64 0.0.0.63 10.0.2.128 0.0.0.127                   !permitting VLAN40
+    70 permit ip 10.0.2.128 0.0.0.127 10.0.2.64 0.0.0.63
+    80 permit tcp any host 10.0.0.226 eq domain                            !permitting to use DNS responses of TCP and UDP
+    90 permit udp any host 10.0.0.226 eq domain
+    100 permit udp any any eq bootps                                       !permitting DHCP messages for any clients
+    110 permit udp any any eq bootpc
+    120 deny ip any any                                                    !denying any other traffic
+
+
+
+
+	|
+	|
+	V
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN50 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN50 uses the following IP range of addresses: 10.0.3.0/28, addresses 10.0.3.10, .11, .12, .13, .14 are reserved and cannot be assigned to the default clients. IP 10.0.3.10 is given to ASW1, 10.0.3.11 is given to DSW1, 10.0.3.12 is assigned to MLS2, 10.0.3.13 is given to MLS1. The address 10.0.3.14 is the default gateway.
+
+| VLAN | Subnet      | Gateway    | DHCP Range          | Reserved IPs |
+| ---- | ----------- | ---------- | ------------------- | ------------ |
+| 50   | 10.0.3.0/28 | 10.0.3.14  | 10.0.3.1-10.0.3.9   | 10-14        |
+
+
+2)The VLAN50 uses ports on both ASW1 and ASW2.
+
+ASW1:    
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN50)** | Fa0/10 (active), Fa0/11(inactive)                      |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan50 (10.0.3.10), Vlan1 (down)                       |
+
+--------------------------------------------------------------------------------
+                                                                         
+ASW2:
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN50)** | Fa0/10 (active), Fa0/11 (inactive)                     |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan50 (Unused), Vlan1 (down)                          |
+
+3)VLAN50 default gateway: 10.0.3.14.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.3.14         |
+| Active HSRP     | MLS1 - 10.0.3.13  |
+| Standby HSRP    | MLS2 - 10.0.3.12  |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN50 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN50 Clients can't access VLAN10, 45 and ping to the remote servers
+
+6)VLAN50 Special devices ( 10.0.3.10 (asw1.floor3.com),10.0.3.11 (dsw1.floor3.com), 10.0.3.12 (MLS2's SVI) and 10.0.3.13 (MLS1's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN50 is DSW2 and configured by lowering STP priority for this VLAN
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS1/2. 
+The direction is IN.
+
+Extended IP access list VL50
+    10 deny ip 10.0.3.0 0.0.0.14 10.0.1.0 0.0.0.127                        !denying VLAN10
+    20 deny ip 10.0.3.0 0.0.0.14 10.0.2.64 0.0.0.63                        !denying VLAN45
+    30 permit icmp 10.0.3.0 0.0.0.14 host 10.0.0.229                       !permitting ping to the PC_ADMIN, due to it is not a remote server
+    40 deny icmp 10.0.3.0 0.0.0.14 10.0.0.224 0.0.0.31                     !denying pinging and traceroutes to the servers
+    50 permit ip any any                                                   !permitting other traffic
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+VLAN60 
+----------------------------------------------------------------------------------------------------------------------
+1)VLAN60 uses the following IP range of addresses: 10.0.3.128/25, addresses 10.0.3.250, .251, .252, .253, .254 are reserved and cannot be assigned to the default clients. IP 10.0.3.250 is given to ASW2, 10.0.3.251 is given to DSW2, 10.0.3.252 is given to MLS2, 10.0.3.253 is given to MLS1. The address 10.0.3.254 is the default gateway.
+
+| VLAN | Subnet        | Gateway    | DHCP Range             | Reserved IPs |
+| ---- | -----------   | ---------- | -------------------    | ------------ |
+| 60   | 10.0.3.128/25 | 10.0.3.254 | 10.0.3.129-10.0.3.249  | 250-254      |
+
+
+2)The VLAN60 uses ports on both ASW1 and ASW2.
+
+ASW1:    
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN60)** | Fa0/12-13 (active), Fa0/14-24(inactive)                |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan60 (10.0.3.10), Vlan1 (down)                       |
+
+--------------------------------------------------------------------------------
+                                                                         
+ASW2:
+| Interface Type      | Ports                                                  |
+| ------------------- | -------------------------------------------------------|
+| **Trunk (Po1)**     | Fa0/1, Fa0/4                                           |
+| **Trunk (Po2)**     | Fa0/2, Fa0/5                                           |
+| **Trunk (Po3)**     | Fa0/3, Fa0/6                                           |
+| **Access (VLAN60)** | Fa0/12-13 (active), Fa0/14-24(inactive)                |
+| **Unused / VLAN1**  | Fa0/7-9(down), Gi0/1(down), Gi0/2 (down)               |
+| **SVI**             | Vlan60 (Unused), Vlan1 (down)                          |
+
+3)VLAN60 default gateway: 10.0.3.254.
+
+| Role            | Address           |
+| --------------- | ----------------- |
+| Virtual IP      | 10.0.3.254        |
+| Active HSRP     | MLS2 - 10.0.3.252 |
+| Standby HSRP    | MLS1 - 10.0.3.253 |
+| HSRP Preemption | Enabled           |
+
+
+
+4)VLAN60 Clients use remote DNS and DHCP servers (host 10.0.0.226 and 10.0.0.227).
+
+5)VLAN60 Clients can't access VLAN10, 45 and the internet (internet.com)
+
+6)VLAN60 Special devices ( 10.0.3.250 (asw2.floor3.com),10.0.3.251 (dsw2.floor3.com), 10.0.3.252 (MLS2's SVI) and 10.0.3.253 (MLS1's SVI) ) can access services such as (T)FTP, SSH, Syslog, DNS and NTP. 
+
+7)The root bridge for the VLAN60 is DSW2 and configured by lowering STP priority for this VLAN.
+
+8)The extended ACL is applied directly on the VLAN's interface on the MLS1/2. 
+The direction is IN.
+
+Extended IP access list VL60
+    10 deny ip 10.0.3.128 0.0.0.127 host 10.0.0.86                           !denying internet
+    20 deny ip 10.0.3.128 0.0.0.127 10.0.1.0 0.0.0.127                       !denying VLAN10
+    30 deny ip 10.0.3.128 0.0.0.127 10.0.2.64 0.0.0.63                       !denying VLAN45
+    40 permit ip any any                                                     !permitting other traffic
+
+
+
+
+
