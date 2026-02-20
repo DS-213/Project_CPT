@@ -10,17 +10,17 @@ Note: The full documentation you can read in Full_Document_PKT1.txt
 ----------------------------------------------------------------------------------------------------------------------
 
 
-
-				        |10.0.0.86|
-					(INTERNET)
-					    |
-					    |
+					
+									        |10.0.0.86|
+											(INTERNET)
+										    |
+										    |
      |VLAN45||VLAN40||VLAN30|(Floor2) --- (CORE) --- (Basement | VLAN1 | Servers)
-		         	          /   \
-   				         /     \
-   				  (Floor1)     (Floor3)
-				  |VLAN10|     |VLAN50|
-				  |VLAN20|     |VLAN60|
+		         	   				       /   \
+				   				         /     \
+					   			  (Floor1)     (Floor3)
+								  |VLAN10|     |VLAN50|
+								  |VLAN20|     |VLAN60|
 
 
 
@@ -1193,6 +1193,7 @@ Expected result: Successful file transfer. (Need to wait a few minutes)
 	    2) To create trap message, try to login with wrong Username or Password.
    
    Expected results: In both cases, trap message will appear in Syslog server.
+
 
 
 
