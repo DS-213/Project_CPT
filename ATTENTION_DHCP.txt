@@ -1,0 +1,16 @@
+
+---------------------------------------------------------------------------------------------------
+Attention!
+---------------------------------------------------------------------------------------------------
+
+Cisco Packet Tracer may not save PC`s config about dynamically assigned DHCP Addresses.
+
+By default, to check if DHCP is enable, click on the PC -> Config(On the top panel) -> In the field
+of Gateway/DNS IPv4 choose 'DHCP'.
+
+Also if after some period of time (usually 30 seconds) no IP address appear, try to switch it to
+Static and to DHCP again.
+
+Also to check if DHCP works properly: Desktop(Top panel) -> Command prompt -> ipconfig /renew. 
+If the IP address doesn`t appear for the first time, try to use this command not once. 3-4 Times would be enough. 
+
