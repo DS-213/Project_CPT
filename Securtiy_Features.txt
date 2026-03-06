@@ -1,0 +1,165 @@
+Project: Project_pkt1
+
+This document provides info about security features, such as DHCP Snooping, Dynamic ARP inspection & Port-Security.
+
+===================================================================================================================
+Attention: Due to CPT simplification (Port-Channels have no possibility to be configured as trusted interfaces),
+DHCP Snooping with Dynamic ARP Inspection were configured on Distribution Switches, which is not protecting 
+against such kinds of attack like ARP poisoning, DHCP poisoning and M-I-T-M attacks in general.
+
+So, my solution protects only from DHCP Exhaustion attacks. However, Basement is configured correctly with either
+Port-Security, DAI and DHCP Snooping. It may protect against above mentioned M-I-T-M attacks. 
+
+In the real life, it would be perfect and highly recommended to provide them as close to the client as possible.
+In our case, each ASW_x has to have DAI and DHCP Snooping configured. Thanks for the attention
+
+===================================================================================================================
+
+-------------------------------------------------------------------------------------------------------------------
+
+Port-Security Policy
+
+-------------------------------------------------------------------------------------------------------------------
+
+Port-Security was provided to resist against DoS and Spoofing kinds of attacks like DHCP Exhaustion.
+
+Each VLAN has its own policy, which means that for each VLAN, Port-security configured in different way.
+
+I wanted to use other type of aging, but Cisco Packet Tracer allow to use Absolute value only.
+
+The Aging time (if enabled) is the same for every VLAN. Its value - 120 Minutes.
+
+VLANs, which have a small amount of ports (compared to others), to be exact VLAN30, VLAN45 and VLAN50 considered as
+non-changing or stable, which means that no need to use aging time for them. 
+
+However, remaining VLAN10,20,40 and 60 need aging time.
+
+Only VLAN10 uses violation 'Shutdown' policy. Others are using 'Restrict' option.
+-------------------------------------------------------------------------------------------------------------------
+
+VLAN10:
+
+1) This VLAN considered as the most unreliable, which will be contact mostly with untrusted devices, 
+and its access policy have to be more isolated and controlled.
+
+2) VLAN10 can have only one MAC-Address per port, due to using of IP Phones, for example, has no sense.
+
+3) VLAN10 is not allowed to use sticky MAC addresses, due to the amount of devices and their types may change and 
+variate. 
+
+4) If on the VLAN10 untrusted MAC was detected - Switch have to only shutdown the interfaces to 'Errdisable' State, 
+and Syslog trap message will occur.
+
+5) Each 120 minutes, Port-Security will learn for the new MAC address.
+
+-------------------------------------------------------------------------------------------------------------------
+
+VLAN20:
+
+1) This VLAN considered as hypothetical unreliable, due to its location on the same floor as VLAN10, but less than 
+VLAN10 itself.
+
+2) VLAN20 can have 2 different MAC-Addresses per one port, due to of using IP Phones (Will be provided soon).
+
+3) VLAN20 uses sticky MAC-Addresses, however the default aging time is enabled.
+
+4) If on the VLAN20 untrusted MAC was detected - switch will drop the traffic with untrusted source MAC address.
+Syslog message will appear.
+
+-------------------------------------------------------------------------------------------------------------------
+
+VLAN40 & VLAN60:
+
+-------------------------------------------------------------------------------------------------------------------
+
+1) These VLANs considered as reliable, but still Port-Security is enabled on each of them. They have similar access
+policy.
+
+2) Both of VLANs has 2 different permitted MAC-Addresses per port for future extension with usage of IP Phones. 
+
+3) Both of VLANs aren`t using sticky MAC-Addresses, but have default aging time.
+
+4) If on their interfaces will come untrusted source MAC - switch will drop the traffic with unreliable source MAC.
+Syslog trap message will occur.
+-------------------------------------------------------------------------------------------------------------------
+
+VLAN 1(BASEMENT), VLAN30, VLAN45 & VLAN50:
+
+-------------------------------------------------------------------------------------------------------------------
+
+1) These VLANs considered as reliable, but still require Port-security features. They have similar access policy.
+
+2) Each of these VLANs has 2 different permitted MAC-Addresses per port for future extension with usage of IP 
+Phones. 
+
+3) Each of them uses sticky MAC-Addresses, but has no default aging time.
+
+4) If on their interfaces will come untrusted source MAC - switch will drop the traffic with unreliable source MAC.
+Syslog trap message will occur.
+
+-------------------------------------------------------------------------------------------------------------------
+
+	|
+	|
+	V
+
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------
+
+DHCP Snooping
+
+-------------------------------------------------------------------------------------------------------------------
+
+1) Each Floor's DSW and SW1 are configured with DHCP Snooping. These Switches isn't providing DHCP informational
+ field (Option 82 is disabled on each configured switch). 
+
+2) Floor 1-3 Trusted interfaces:
+	DSWx: G0/1, G0/2
+
+3) Basement (Floor0) Trusted interfaces:
+	SW1: G0/1
+
+4) DHCP Snooping is analyzing each VLAN's DHCP messages, including VLAN1 in each floor, which is not used for 
+better protecting. 
+
+5) Better Solution for Floor1-3: Remove DHCP Snooping config from Distribution Switches, or change the Port-channel
+interfaces to trusted. Then, configure on each ASWx DHCP Snooping on each VLAN and without informational option 82. 
+The trusted interfaces variates, but mostly are Port-Channel1, Port-Channel2 or Port-Channel3.
+
+-------------------------------------------------------------------------------------------------------------------
+
+Dynamic ARP Inspection	(DAI)
+
+-------------------------------------------------------------------------------------------------------------------
+
+1) Each Floor's DSW and SW1 are configured with DAI. 
+
+2) Floor 1-3 Trusted interfaces:
+	DSWx: G0/1, G0/2
+
+3) Basement (Floor0) Trusted interfaces:
+	SW1: G0/1
+
+4) DAI is analyzing each VLAN's ARP message, including VLAN1 in each floor, which is not used for better 
+protecting. 
+
+5) Configured DAI has additional configuration with deep inspecting of IP addresses, Source and Destination MAC 
+Addresses.
+
+6) Better solution: For Floor1-3 provide DAI on the each ASWx, remove DAI or change its trusting interfaces as well 
+as DHCP Snooping solution.  
+
+ 
+
+
+
+
+
+
+
+
+
+
